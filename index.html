@@ -478,7 +478,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'venda-2026-07-17.3'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'venda-2026-07-17.4'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -761,7 +761,7 @@ const SB_URL = 'https://wrveumblqdsxsteyohcp.supabase.co';
 // Link de pagamento do Mercado Pago (R$ 49,90/ano). Enquanto vazio, o botão
 // Renovar mostra a mensagem de contato; quando o Bruno colar o link aqui,
 // o botão passa a abrir a página de pagamento sozinho.
-const LINK_PAGAMENTO = '';
+const LINK_PAGAMENTO = 'https://mpago.la/13h2raj';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndydmV1bWJscWRzeHN0ZXlvaGNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTUwOTQsImV4cCI6MjA5OTc3MTA5NH0.6TowAHbGmvOm8cwoHszauqluUWHJKGmBsmtJqHpbEwc';
 let sbCli = null, sbUser = null, assinaturaInfo = null;
 let carregandoNuvem = false; // enquanto baixa da nuvem, não re-salvar o que acabou de chegar
