@@ -478,7 +478,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'venda-2026-07-17.2'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'venda-2026-07-17.3'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -758,6 +758,10 @@ document.getElementById('btnRemoverPin').addEventListener('click', ()=>{
 
 /* =================== NUVEM (Supabase — moldes do Mesa do Perito) =================== */
 const SB_URL = 'https://wrveumblqdsxsteyohcp.supabase.co';
+// Link de pagamento do Mercado Pago (R$ 49,90/ano). Enquanto vazio, o botão
+// Renovar mostra a mensagem de contato; quando o Bruno colar o link aqui,
+// o botão passa a abrir a página de pagamento sozinho.
+const LINK_PAGAMENTO = '';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndydmV1bWJscWRzeHN0ZXlvaGNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTUwOTQsImV4cCI6MjA5OTc3MTA5NH0.6TowAHbGmvOm8cwoHszauqluUWHJKGmBsmtJqHpbEwc';
 let sbCli = null, sbUser = null, assinaturaInfo = null;
 let carregandoNuvem = false; // enquanto baixa da nuvem, não re-salvar o que acabou de chegar
@@ -865,9 +869,16 @@ function checarAssinatura(){
   }
 }
 function abrirRenovacao(){
+  if(LINK_PAGAMENTO){
+    window.open(LINK_PAGAMENTO, '_blank');
+    const m = document.getElementById('vc-msg');
+    m.className = 'msg-login ok';
+    m.textContent = 'Abrimos a página de pagamento em outra aba. Depois de pagar, volte aqui e clique em "Já renovei". A liberação pode levar até 1 dia útil.';
+    return;
+  }
   const m = document.getElementById('vc-msg');
   m.className = 'msg-login ok';
-  m.textContent = 'Link de pagamento em breve (Mercado Pago). Por enquanto, renove falando com o suporte.';
+  m.textContent = 'Para renovar, fale com o Bruno: brunopkaminski@gmail.com. Você recebe o link de pagamento na hora.';
 }
 async function jaRenovei(){
   await carregaAssinatura();
@@ -1930,7 +1941,29 @@ document.getElementById('btnExportar').addEventListener('click', ()=>{
 });
 
 /* Restaurar backup: aceita o backup do Fluxo antigo (lista de lançamentos)
-   ou um pacote completo. Não apaga nada — só adiciona o que ainda não existe. */
+   ou um pacote completo. Não apaga nada — só adiciona o que ainda não existe.
+   A lógica fica em função separada para o robô de testes conseguir testá-la. */
+function restaurarBackupTexto(texto){
+  const dado = JSON.parse(texto); // se não for JSON, deixa o erro subir
+  const lista = Array.isArray(dado) ? dado : (Array.isArray(dado.transacoes) ? dado.transacoes : null);
+  if(!lista) throw new Error('Este arquivo não parece um backup do Fluxo.');
+  const cache = getCache();
+  const idsExistentes = new Set(cache.map(t=>String(t.id)));
+  let adicionados = 0;
+  for(const t of lista){
+    if(!t || !t.data || t.valor === undefined) continue; // ignora linhas quebradas
+    if(t.id !== undefined && idsExistentes.has(String(t.id))) continue; // já existe
+    const novo = Object.assign({}, t);
+    if(novo.id === undefined || novo.id === null || novo.id === ''){
+      novo.id = 'tx-' + Date.now() + '-' + Math.floor(Math.random()*100000) + '-' + adicionados;
+    }
+    idsExistentes.add(String(novo.id));
+    cache.push(novo);
+    adicionados++;
+  }
+  setCache(cache); // agenda o salvamento na nuvem sozinho
+  return adicionados;
+}
 document.getElementById('btnRestaurar').addEventListener('click', ()=>{
   document.getElementById('inputRestaurar').click();
 });
@@ -1940,24 +1973,7 @@ document.getElementById('inputRestaurar').addEventListener('change', (ev)=>{
   const leitor = new FileReader();
   leitor.onload = ()=>{
     try{
-      const dado = JSON.parse(leitor.result);
-      const lista = Array.isArray(dado) ? dado : (Array.isArray(dado.transacoes) ? dado.transacoes : null);
-      if(!lista){ alert('Este arquivo não parece um backup do Fluxo.'); return; }
-      const cache = getCache();
-      const idsExistentes = new Set(cache.map(t=>String(t.id)));
-      let adicionados = 0;
-      for(const t of lista){
-        if(!t || !t.data || t.valor === undefined) continue; // ignora linhas quebradas
-        if(t.id !== undefined && idsExistentes.has(String(t.id))) continue; // já existe
-        const novo = Object.assign({}, t);
-        if(novo.id === undefined || novo.id === null || novo.id === ''){
-          novo.id = 'tx-' + Date.now() + '-' + Math.floor(Math.random()*100000) + '-' + adicionados;
-        }
-        idsExistentes.add(String(novo.id));
-        cache.push(novo);
-        adicionados++;
-      }
-      setCache(cache); // agenda o salvamento na nuvem sozinho
+      const adicionados = restaurarBackupTexto(leitor.result);
       render();
       alert(adicionados > 0
         ? adicionados + ' lançamento(s) restaurado(s) com sucesso! Já estão sendo salvos na nuvem.'

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxo — suas finanças por voz | R$ 49,90/ano</title>
+<meta name="description" content="Fluxo: o app de finanças pessoais mais simples do Brasil. Fale 'gastei 35 reais no mercado' e pronto. R$ 49,90 por ano, menos de R$ 1 por semana. 7 dias grátis.">
+<meta name="theme-color" content="#0F172A">
+<link rel="icon" href="./icon-192.png">
+<style>
+  :root{
+    --azul:#2563EB; --azul-claro:#60A5FA; --bg:#0F172A; --card:#1E293B;
+    --texto:#E2E8F0; --muted:#94A3B8; --verde:#22C55E;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--texto);line-height:1.6;}
+  .wrap{max-width:680px;margin:0 auto;padding:0 20px;}
+  header{padding:48px 0 8px;text-align:center;}
+  .logo{font-size:44px;font-weight:800;letter-spacing:-1px;color:#fff;}
+  .logo span{color:var(--azul-claro);}
+  .assin{font-size:13px;color:var(--muted);margin-top:2px;}
+  .hero{text-align:center;padding:26px 0 10px;}
+  .hero h1{font-size:26px;line-height:1.3;color:#fff;}
+  .hero p{margin-top:12px;color:var(--muted);font-size:16px;}
+  .fala{background:var(--card);border-radius:14px;padding:16px 18px;margin:24px auto 0;max-width:440px;text-align:left;display:flex;gap:12px;align-items:center;}
+  .fala .mic{width:42px;height:42px;border-radius:50%;background:var(--azul);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;}
+  .fala .txt b{color:#fff;}
+  .fala .txt small{color:var(--muted);display:block;margin-top:2px;}
+  .cta{display:block;background:var(--azul);color:#fff;text-decoration:none;text-align:center;font-size:17px;font-weight:700;padding:16px;border-radius:13px;margin:26px auto 8px;max-width:440px;}
+  .cta.secundario{background:transparent;border:1.5px solid var(--azul-claro);color:var(--azul-claro);font-weight:600;}
+  .cta-sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:8px;}
+  section{padding:30px 0 6px;}
+  h2{font-size:20px;color:#fff;margin-bottom:14px;text-align:center;}
+  .cards{display:grid;gap:12px;}
+  .card{background:var(--card);border-radius:14px;padding:18px;}
+  .card b{color:#fff;display:block;margin-bottom:4px;font-size:15px;}
+  .card p{font-size:14px;color:var(--muted);}
+  .preco-box{background:linear-gradient(135deg,#1D4ED8,#2563EB);border-radius:18px;padding:28px 22px;text-align:center;margin-top:10px;}
+  .preco-box .valor{font-size:40px;font-weight:800;color:#fff;}
+  .preco-box .valor small{font-size:16px;font-weight:600;color:#BFDBFE;}
+  .preco-box .porsem{color:#DBEAFE;font-size:14px;margin-top:2px;}
+  .preco-box ul{list-style:none;margin:16px 0 4px;text-align:left;display:inline-block;}
+  .preco-box li{font-size:14px;color:#EFF6FF;margin:6px 0;}
+  .preco-box li::before{content:"✓  ";color:#86EFAC;font-weight:700;}
+  details{background:var(--card);border-radius:12px;padding:14px 18px;margin-bottom:10px;}
+  summary{cursor:pointer;font-weight:600;color:#fff;font-size:15px;}
+  details p{margin-top:10px;font-size:14px;color:var(--muted);}
+  ol{margin:10px 0 0 20px;font-size:14px;color:var(--muted);}
+  ol li{margin:6px 0;}
+  footer{text-align:center;padding:34px 0 44px;color:var(--muted);font-size:13px;}
+  footer a{color:var(--azul-claro);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <div class="logo">Flu<span>xo</span></div>
+  <div class="assin">by Bruno Kaminski</div>
+</header>
+
+<div class="hero wrap">
+  <h1>Anote seus gastos falando.<br>O resto o Fluxo faz sozinho.</h1>
+  <p>O jeito mais simples de saber para onde vai o seu dinheiro — sem planilha, sem complicação, sem dó de abrir o app.</p>
+  <div class="fala">
+    <div class="mic">🎙️</div>
+    <div class="txt"><b>"gastei 35 reais no mercado"</b><small>Pronto. Lançado, categorizado e salvo na nuvem.</small></div>
+  </div>
+  <a class="cta" href="https://fluxo-venda.vercel.app">Testar grátis por 7 dias</a>
+  <div class="cta-sub">Sem cartão de crédito para testar. Cria a conta e usa na hora.</div>
+</div>
+
+<section class="wrap">
+  <h2>O que o Fluxo faz por você</h2>
+  <div class="cards">
+    <div class="card"><b>🎙️ Lançamento por voz</b><p>Fale ou digite do seu jeito: "gastei 50 no posto ontem". O Fluxo entende o valor, a data e a categoria sozinho.</p></div>
+    <div class="card"><b>📊 Resumo que se entende</b><p>Entradas, saídas e para onde foi o dinheiro, mês a mês, em barras simples com valor e porcentagem. Exporta resumo em PDF.</p></div>
+    <div class="card"><b>🐷 Cofre e meta de economia</b><p>O que você guarda não é tratado como gasto. Acompanhe quanto já juntou e defina sua meta.</p></div>
+    <div class="card"><b>🔁 Contas recorrentes e orçamento</b><p>Aluguel, luz, internet: lançadas sozinhas todo mês. Defina limite por categoria e veja a barra encher.</p></div>
+    <div class="card"><b>☁️ Seus dados na nuvem, em qualquer aparelho</b><p>Celular, computador, tablet: entra com e-mail e senha e está tudo lá, salvo automaticamente.</p></div>
+    <div class="card"><b>🔒 Privacidade</b><p>Só você acessa seus dados, protegidos por senha. Bloqueio por PIN na tela, se quiser. Backup para baixar quando quiser.</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>Preço único, sem pegadinha</h2>
+  <div class="preco-box">
+    <div class="valor">R$ 49,90 <small>/ano</small></div>
+    <div class="porsem">menos de R$ 1 por semana</div>
+    <ul>
+      <li>7 dias grátis para testar, sem cartão</li>
+      <li>Pagamento anual — Pix ou cartão em 1x</li>
+      <li>SEM mensalidade, SEM renovação automática</li>
+      <li>Todas as atualizações incluídas</li>
+    </ul>
+  </div>
+  <a class="cta" id="btnAssinar" href="https://fluxo-venda.vercel.app">Começar agora — 7 dias grátis</a>
+  <div class="cta-sub" id="assinarSub">Depois do teste, você recebe o link de pagamento dentro do próprio app.</div>
+</section>
+
+<section class="wrap">
+  <h2>Como instalar no seu aparelho</h2>
+  <details>
+    <summary>📱 Android (Chrome)</summary>
+    <ol>
+      <li>Abra <b>fluxo-venda.vercel.app</b> no Chrome</li>
+      <li>Toque nos três pontinhos (⋮) no canto de cima</li>
+      <li>Toque em <b>"Adicionar à tela inicial"</b> (ou "Instalar app")</li>
+      <li>Confirme — o ícone do Fluxo aparece junto dos seus outros apps</li>
+    </ol>
+  </details>
+  <details>
+    <summary>🍎 iPhone (Safari)</summary>
+    <ol>
+      <li>Abra <b>fluxo-venda.vercel.app</b> no Safari</li>
+      <li>Toque no botão de compartilhar (quadrado com seta para cima)</li>
+      <li>Role e toque em <b>"Adicionar à Tela de Início"</b></li>
+      <li>Toque em "Adicionar" — pronto</li>
+    </ol>
+  </details>
+  <details>
+    <summary>💻 Computador (Chrome ou Edge)</summary>
+    <ol>
+      <li>Abra <b>fluxo-venda.vercel.app</b></li>
+      <li>Na barra de endereço, à direita, clique no ícone de instalar (um monitorzinho com seta)</li>
+      <li>Clique em <b>"Instalar"</b> — o Fluxo vira um programa no seu computador</li>
+    </ol>
+  </details>
+</section>
+
+<section class="wrap">
+  <h2>Perguntas frequentes</h2>
+  <details>
+    <summary>Preciso instalar? Não pode usar só no navegador?</summary>
+    <p>Pode usar direto no navegador, sem instalar nada. Instalar é opcional — só deixa o acesso mais rápido, com ícone na tela inicial.</p>
+  </details>
+  <details>
+    <summary>E se eu não renovar depois de um ano?</summary>
+    <p>Nada é apagado. Seus dados continuam guardados em segurança — o app só fica pausado até você renovar. Sem multa, sem cobrança automática.</p>
+  </details>
+  <details>
+    <summary>Meus dados ficam seguros?</summary>
+    <p>Sim. Seus lançamentos ficam na nuvem, protegidos por e-mail e senha, e só a sua conta acessa. Você também pode baixar um backup quando quiser.</p>
+  </details>
+  <details>
+    <summary>Funciona sem internet?</summary>
+    <p>Funciona: você lança normalmente e, quando a internet voltar, o app envia tudo para a nuvem sozinho.</p>
+  </details>
+  <details>
+    <summary>Quem fez o Fluxo?</summary>
+    <p>O Fluxo foi criado por Bruno Kaminski, economista, para o próprio uso diário — e continua sendo usado por ele todos os dias. Simples porque foi feito para durar na rotina de verdade.</p>
+  </details>
+</section>
+
+<footer class="wrap">
+  Fluxo · by Bruno Kaminski<br>
+  Dúvidas e suporte: <a href="mailto:brunopkaminski@gmail.com">brunopkaminski@gmail.com</a>
+</footer>
+
+<script>
+  // Link de pagamento do Mercado Pago — quando o Bruno colar o link aqui,
+  // o botão "Começar agora" da seção de preço passa a levar ao pagamento.
+  const LINK_PAGAMENTO = '';
+  if(LINK_PAGAMENTO){
+    const b = document.getElementById('btnAssinar');
+    b.href = LINK_PAGAMENTO;
+    b.textContent = 'Assinar — R$ 49,90/ano (Pix ou cartão)';
+    document.getElementById('assinarSub').textContent = 'Pagamento seguro pelo Mercado Pago. Prefere testar antes? Crie a conta grátis no app.';
+  }
+</script>
+
+</body>
+</html>
