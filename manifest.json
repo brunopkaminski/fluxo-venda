@@ -1,0 +1,25 @@
+{
+  "name": "Fluxo",
+  "short_name": "Fluxo",
+  "description": "Controle simples de entradas e saídas, com registro por voz.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png?v=5", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png?v=5", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-192.png?v=5", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-maskable-512.png?v=5", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Adicionar gasto",
+      "short_name": "Adicionar",
+      "url": "./index.html?tab=adicionar",
+      "icons": [{ "src": "icon-maskable-192.png?v=5", "sizes": "192x192" }]
+    }
+  ]
+}
