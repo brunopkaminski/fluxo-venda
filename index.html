@@ -451,6 +451,13 @@
   </div>
 
   <div class="card">
+    <h3><span class="icn" data-icon="sheet" data-size="17"></span> Trazer da planilha</h3>
+    <button class="btn-secondary" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;" id="btnImportarPlanilha"><span class="icn" data-icon="upload" data-size="17"></span> Importar planilha (Excel ou CSV)</button>
+    <input type="file" id="inputPlanilha" accept=".xlsx,.xls,.csv,.txt,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 0;">Já controla seus gastos numa planilha? Escolha o arquivo e o app entende sozinho quais são as colunas de data, valor e descrição. Você confere antes de importar. Nada é apagado, e lançamentos repetidos são ignorados.</p>
+  </div>
+
+  <div class="card">
     <h3><span class="icn" data-icon="download" data-size="17"></span> Backup local</h3>
     <button class="btn-secondary" style="width:100%;" id="btnExportar">Baixar backup (.json)</button>
     <button class="btn-secondary" style="width:100%;margin-top:8px;" id="btnRestaurar">Restaurar backup (.json)</button>
@@ -478,7 +485,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'venda-2026-07-18.2'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'venda-2026-07-20.1'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -540,6 +547,9 @@ const ICON_PATHS = {
   card: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>',
   wifi: '<path d="M2 8.5a16 16 0 0 1 20 0"/><path d="M5 12a11 11 0 0 1 14 0"/><path d="M8.5 15.5a6 6 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>',
   zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/>',
+  upload: '<path d="M12 21V9"/><polyline points="7 13 12 8 17 13"/><path d="M5 5h14"/>',
+  check: '<polyline points="4 12 9 17 20 6"/>',
 };
 function icon(name, size, color){
   const p = ICON_PATHS[name] || ICON_PATHS.dots;
@@ -1982,6 +1992,489 @@ document.getElementById('inputRestaurar').addEventListener('change', (ev)=>{
     ev.target.value = '';
   };
   leitor.readAsText(arq);
+});
+
+/* =================== IMPORTAR PLANILHA (Excel / CSV) ===================
+   Muita gente já controla o dinheiro numa planilha. Este bloco lê o arquivo,
+   descobre sozinho qual coluna é data, valor, descrição etc., mostra uma
+   conferência (com prévia) e só então grava. Toda a lógica de conversão fica em
+   funções puras (plDataISO, plValor, plTipo, plMontar, plGravar) para o robô de
+   testes conseguir testar sem abrir o navegador. */
+
+/* --- 1. Conversores --------------------------------------------------- */
+
+// Aceita Date (vindo do Excel), número de série do Excel, dd/mm/aaaa,
+// aaaa-mm-dd, dd-mm-aa e "10 de março de 2026". Devolve '' se não entender.
+function plDataISO(v){
+  if(v===null || v===undefined || v==='') return '';
+  if(v instanceof Date && !isNaN(v.getTime())){
+    // ATENÇÃO: a data que vem do Excel não cai exatamente na meia-noite — vem uns
+    // segundos ANTES dela (arredondamento da própria planilha). Lida do jeito
+    // ingênuo, "05/03" virava "04/03" no app inteiro. Por isso arredondamos para
+    // a meia-noite mais próxima quando falta menos de ~1 minuto para o dia virar.
+    const local = v.getTime() - v.getTimezoneOffset()*60000;
+    const bruto = local / 86400000;
+    const dia = (bruto - Math.floor(bruto)) > 0.999 ? Math.ceil(bruto) : Math.floor(bruto);
+    const d = new Date(dia * 86400000);
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  if(typeof v === 'number' && isFinite(v)){
+    // Número de série do Excel: dias desde 30/12/1899. A faixa 20000–80000
+    // cobre de 1954 a 2119 — fora disso é valor, não data.
+    if(v > 20000 && v < 80000){
+      const d = new Date(Date.UTC(1899,11,30) + Math.round(v)*86400000);
+      return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+    }
+    return '';
+  }
+  const s = String(v).trim();
+  if(!s) return '';
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m){
+    const mes=+m[2], dia=+m[3];
+    if(mes<1||mes>12||dia<1||dia>31) return '';
+    return m[1]+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+  }
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
+  if(m){
+    let dia=+m[1], mes=+m[2], ano=m[3];
+    if(ano.length===2) ano = (+ano > 70 ? '19' : '20') + ano;
+    // Planilha em formato americano (mm/dd): só dá pra saber quando o primeiro
+    // número passa de 12. Aí os dois trocam de lugar.
+    if(dia>12 && mes<=12){ /* dd/mm normal */ }
+    else if(mes>12 && dia<=12){ const t=dia; dia=mes; mes=t; }
+    if(mes<1||mes>12||dia<1||dia>31) return '';
+    return ano+'-'+String(mes).padStart(2,'0')+'-'+String(dia).padStart(2,'0');
+  }
+  const MESES = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+  m = normalizar(s).match(/^(\d{1,2})\s*(?:de\s+)?([a-z]{3})[a-z]*\.?\s*(?:de\s+)?(\d{2,4})/);
+  if(m && MESES[m[2]]){
+    let ano = m[3]; if(ano.length===2) ano = '20'+ano;
+    return ano+'-'+String(MESES[m[2]]).padStart(2,'0')+'-'+String(+m[1]).padStart(2,'0');
+  }
+  return '';
+}
+
+// Aceita 1234.56, "R$ 1.234,56", "1,234.56", "-120,00", "(120,00)" e devolve
+// número (negativo quando a planilha marca saída com sinal). null = sem valor.
+function plValor(v){
+  if(v===null || v===undefined || v==='') return null;
+  if(typeof v === 'number') return isFinite(v) ? v : null;
+  let s = String(v).trim();
+  if(!s) return null;
+  let neg = false;
+  if(/^\(.*\)$/.test(s)){ neg = true; s = s.slice(1,-1); }        // contabilidade: (120,00)
+  if(/^\s*-/.test(s) || /-\s*$/.test(s)) neg = true;
+  s = s.replace(/[^\d.,]/g,'');                                    // tira R$, espaço, letras, sinal
+  if(!s) return null;
+  const temVirgula = s.indexOf(',')>=0, temPonto = s.indexOf('.')>=0;
+  if(temVirgula && temPonto){
+    // O separador que aparece por último é o decimal.
+    if(s.lastIndexOf(',') > s.lastIndexOf('.')) s = s.replace(/\./g,'').replace(',','.');
+    else s = s.replace(/,/g,'');
+  } else if(temVirgula){
+    const p = s.split(',');
+    // "1,234" é ambíguo: 3 casas depois da vírgula = separador de milhar.
+    if(p.length===2 && p[1].length===3 && p[0].length<=3) s = s.replace(',','');
+    else s = s.replace(/\./g,'').replace(',','.');
+  } else if(temPonto){
+    const p = s.split('.');
+    if(p.length>2) s = s.replace(/\./g,'');                        // 1.234.567
+    else if(p[1] && p[1].length===3 && p[0].length<=3) s = s.replace('.','');  // 1.234 = mil e duzentos
+  }
+  const n = parseFloat(s);
+  if(!isFinite(n)) return null;
+  return neg ? -n : n;
+}
+
+const PL_ENTRADA_TXT = ['entrada','receita','credito','credit','ganho','recebiment','recebido','recebi','deposito','provento','rendiment','salario','venda'];
+const PL_SAIDA_TXT   = ['saida','despesa','debito','debit','gasto','pagament','pago','paguei','retirada','compra','custo','saque'];
+// Lê a coluna "tipo" da planilha. Devolve 'entrada', 'saida' ou null (não entendi).
+function plTipo(v){
+  const n = normalizar(String(v===null||v===undefined?'':v)).trim();
+  if(!n) return null;
+  if(n==='c' || n==='+' || n==='e') return 'entrada';
+  if(n==='d' || n==='-' || n==='s') return 'saida';
+  for(const p of PL_ENTRADA_TXT){ if(n.indexOf(p)>=0) return 'entrada'; }
+  for(const p of PL_SAIDA_TXT){ if(n.indexOf(p)>=0) return 'saida'; }
+  return null;
+}
+
+/* --- 2. Reconhecimento das colunas ------------------------------------ */
+
+const PL_CAMPOS = [
+  {k:'data',      rotulo:'Data',              syn:['data','data do lancamento','data lancamento','data de pagamento','data da compra','data compra','dia','date','vencimento','competencia','emissao']},
+  {k:'tipo',      rotulo:'Entrada ou saída',  syn:['tipo','entrada/saida','entrada ou saida','receita/despesa','debito/credito','credito/debito','natureza','operacao','movimento','d/c','tipo de lancamento','tipo do lancamento']},
+  {k:'entrada',   rotulo:'Coluna de entradas',syn:['entrada','entradas','receita','receitas','credito','creditos','ganhos','recebimentos','deposito','depositos','valor entrada']},
+  {k:'saida',     rotulo:'Coluna de saídas',  syn:['saida','saidas','despesa','despesas','debito','debitos','gasto','gastos','pagamentos','retiradas','valor saida']},
+  {k:'valor',     rotulo:'Valor',             syn:['valor','valor r','valor total','valor do lancamento','montante','quantia','preco','total','amount','value']},
+  {k:'categoria', rotulo:'Categoria',         syn:['categoria','categorias','classificacao','grupo','rubrica','centro de custo','tipo de gasto','tipo de despesa','category','conta']},
+  {k:'descricao', rotulo:'Descrição',         syn:['descricao','historico','detalhe','detalhes','item','lancamento','estabelecimento','memo','titulo','nome','observacao','observacoes','referencia','description','onde','com o que']},
+];
+
+function plNormCab(s){ return normalizar(String(s===null||s===undefined?'':s)).replace(/[^a-z0-9\/ ]/g,' ').replace(/\s+/g,' ').trim(); }
+
+// Duas passadas: primeiro nome idêntico, depois nome que contém a palavra.
+// Isso evita que "Entrada/Saída" (que é a coluna de tipo) seja confundida com
+// uma coluna de entradas. Uma coluna já usada não é reaproveitada.
+function plAdivinharColunas(cabecalhos){
+  const cab = cabecalhos.map(plNormCab);
+  const usados = new Set();
+  const mapa = {};
+  PL_CAMPOS.forEach(c=>{ mapa[c.k] = -1; });
+  for(const campo of PL_CAMPOS){
+    for(let i=0;i<cab.length;i++){
+      if(usados.has(i) || !cab[i]) continue;
+      if(campo.syn.some(s=>cab[i]===s)){ mapa[campo.k]=i; usados.add(i); break; }
+    }
+  }
+  for(const campo of PL_CAMPOS){
+    if(mapa[campo.k]>=0) continue;
+    for(let i=0;i<cab.length;i++){
+      if(usados.has(i) || !cab[i]) continue;
+      if(campo.syn.some(s=>s.length>=4 && cab[i].indexOf(s)>=0)){ mapa[campo.k]=i; usados.add(i); break; }
+    }
+  }
+  return mapa;
+}
+
+// 'duas'  = uma coluna de entradas e outra de saídas
+// 'tipo'  = uma coluna de valor + uma coluna dizendo entrada/saída
+// 'sinal' = uma coluna de valor só, negativo = saída
+function plDetectarFormato(mapa){
+  if(mapa.entrada>=0 && mapa.saida>=0) return 'duas';
+  if(mapa.valor>=0 && mapa.tipo>=0) return 'tipo';
+  if(mapa.valor>=0) return 'sinal';
+  if(mapa.entrada>=0 || mapa.saida>=0) return 'duas';
+  return 'sinal';
+}
+
+/* --- 3. Leitura do arquivo -------------------------------------------- */
+
+function plLerCSV(texto){
+  texto = String(texto).replace(/^﻿/,'');
+  // O separador é descoberto olhando as primeiras linhas de verdade — não só a
+  // primeira. Muita planilha começa com um título ("MEU CONTROLE 2026") que não
+  // tem separador nenhum e enganava a detecção.
+  const amostra = texto.split(/\r?\n/).filter(l=>l.trim()!=='').slice(0,10).join('\n');
+  const cont = c => amostra.split(c).length - 1;
+  let delim = ';', melhor = cont(';');
+  [',','\t','|'].forEach(c=>{ const n = cont(c); if(n > melhor){ melhor = n; delim = c; } });
+  if(melhor === 0) delim = ';';
+  const linhas=[]; let linha=[], cur='', aspas=false;
+  for(let i=0;i<texto.length;i++){
+    const c = texto[i];
+    if(aspas){
+      if(c==='"'){ if(texto[i+1]==='"'){ cur+='"'; i++; } else aspas=false; }
+      else cur+=c;
+    } else {
+      if(c==='"') aspas=true;
+      else if(c===delim){ linha.push(cur); cur=''; }
+      else if(c==='\n'){ linha.push(cur); linhas.push(linha); linha=[]; cur=''; }
+      else if(c==='\r'){ /* ignora */ }
+      else cur+=c;
+    }
+  }
+  if(cur!=='' || linha.length){ linha.push(cur); linhas.push(linha); }
+  return plArrumarGrade(linhas);
+}
+
+// Descarta linhas em branco, acha a linha de cabeçalho (a primeira com pelo
+// menos 2 células preenchidas) e alinha todas as linhas ao mesmo tamanho.
+function plArrumarGrade(grade){
+  grade = grade.filter(l => l.some(x => String(x===null||x===undefined?'':x).trim()!==''));
+  let iCab = 0;
+  for(let i=0;i<Math.min(grade.length,15);i++){
+    const preenchidas = grade[i].filter(x=>String(x===null||x===undefined?'':x).trim()!=='').length;
+    if(preenchidas>=2){ iCab = i; break; }
+  }
+  const cabecalhos = (grade[iCab]||[]).map(h => String(h===null||h===undefined?'':h).trim());
+  const linhas = grade.slice(iCab+1).map(l => cabecalhos.map((_,i)=> l[i]===undefined||l[i]===null ? '' : l[i]));
+  return {cabecalhos, linhas};
+}
+
+// A biblioteca de Excel só é baixada quando o usuário realmente importa um
+// .xlsx — assim o app continua leve e funcionando offline no dia a dia.
+function plCarregarXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(window.__plXLSX) return window.__plXLSX;
+  window.__plXLSX = new Promise((ok, falha)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = ()=>ok();
+    s.onerror = ()=>{ window.__plXLSX = null; falha(new Error('Para ler arquivos de Excel preciso de internet na primeira vez. Conecte e tente de novo — ou salve a planilha como CSV e importe assim.')); };
+    document.head.appendChild(s);
+  });
+  return window.__plXLSX;
+}
+
+function plLerArquivo(arq){
+  const nome = (arq.name||'').toLowerCase();
+  const ehExcel = /\.(xlsx|xlsm|xls)$/.test(nome);
+  return new Promise((ok, falha)=>{
+    const leitor = new FileReader();
+    leitor.onerror = ()=> falha(new Error('Não consegui abrir este arquivo.'));
+    if(ehExcel){
+      leitor.onload = ()=>{
+        plCarregarXLSX().then(()=>{
+          try{
+            const wb = XLSX.read(new Uint8Array(leitor.result), {type:'array', cellDates:true});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const grade = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+            const r = plArrumarGrade(grade);
+            r.nome = arq.name; r.aba = wb.SheetNames[0]; r.abas = wb.SheetNames.length;
+            ok(r);
+          }catch(e){ falha(new Error('Não consegui ler este Excel. Tente salvar como CSV e importar de novo.')); }
+        }).catch(falha);
+      };
+      leitor.readAsArrayBuffer(arq);
+    } else {
+      leitor.onload = ()=>{
+        try{
+          let texto = leitor.result;
+          // CSV salvo pelo Excel no Brasil costuma vir em Windows-1252. Se o
+          // texto veio com caracteres quebrados, lê de novo nessa codificação.
+          if(texto.indexOf('�') >= 0){
+            const l2 = new FileReader();
+            l2.onload = ()=>{ const r = plLerCSV(l2.result); r.nome = arq.name; ok(r); };
+            l2.onerror = ()=>{ const r = plLerCSV(texto); r.nome = arq.name; ok(r); };
+            try{ l2.readAsText(arq, 'windows-1252'); return; }catch(e){}
+          }
+          const r = plLerCSV(texto); r.nome = arq.name; ok(r);
+        }catch(e){ falha(new Error('Não consegui ler este arquivo. Ele precisa ser .xlsx, .xls ou .csv.')); }
+      };
+      leitor.readAsText(arq, 'utf-8');
+    }
+  });
+}
+
+/* --- 4. Transformar as linhas em lançamentos -------------------------- */
+
+function plLimpar(s, max){
+  s = String(s===null||s===undefined?'':s).replace(/\s+/g,' ').trim();
+  return max && s.length>max ? s.slice(0,max) : s;
+}
+
+function plMontar(linhas, mapa, formato){
+  const lancamentos = [];
+  let semData=0, semValor=0, tipoChutado=0;
+  linhas.forEach(r=>{
+    const data = mapa.data>=0 ? plDataISO(r[mapa.data]) : '';
+    let valor=null, tipo=null, chutou=false;
+    if(formato==='duas'){
+      const e = mapa.entrada>=0 ? plValor(r[mapa.entrada]) : null;
+      const s = mapa.saida>=0 ? plValor(r[mapa.saida]) : null;
+      if(e!==null && Math.abs(e)>0){ valor=Math.abs(e); tipo='entrada'; }
+      else if(s!==null && Math.abs(s)>0){ valor=Math.abs(s); tipo='saida'; }
+    } else {
+      const v = mapa.valor>=0 ? plValor(r[mapa.valor]) : null;
+      if(v!==null && v!==0){
+        valor = Math.abs(v);
+        if(formato==='tipo'){
+          tipo = mapa.tipo>=0 ? plTipo(r[mapa.tipo]) : null;
+          if(!tipo){ tipo = 'saida'; chutou = true; }   // sem informação, o mais provável é ser gasto
+        } else {
+          tipo = v<0 ? 'saida' : 'entrada';
+        }
+      }
+    }
+    if(valor===null){ semValor++; return; }
+    if(!data){ semData++; return; }
+    if(chutou) tipoChutado++;   // só conta nas linhas que realmente vão entrar
+    const categoria = plLimpar(mapa.categoria>=0 ? r[mapa.categoria] : '', 40) || 'Outros';
+    const descricao = plLimpar(mapa.descricao>=0 ? r[mapa.descricao] : '', 120) || categoria;
+    lancamentos.push({data, tipo, valor:Math.round(valor*100)/100, categoria, descricao});
+  });
+  return {lancamentos, semData, semValor, tipoChutado};
+}
+
+/* --- 5. Gravar -------------------------------------------------------- */
+
+function plChave(t){
+  return [t.data, Number(t.valor).toFixed(2), t.tipo, normalizar(String(t.descricao||'')).trim()].join('|');
+}
+
+// Repetido é comparado por CONTAGEM, não só por existir: se a planilha tem dois
+// cafés de R$ 5 no mesmo dia, os dois entram. Mas importar o mesmo arquivo duas
+// vezes não duplica nada, porque a segunda vez encontra os dois já lá.
+function plGravar(lancamentos){
+  const cache = getCache();
+  const contagem = {};
+  cache.forEach(t=>{ const k = plChave(t); contagem[k] = (contagem[k]||0) + 1; });
+  const cats = getCategorias();
+  const nomes = new Set(cats.map(c=>c.nome));
+  const novas = [];
+  let adicionados = 0, repetidos = 0;
+  lancamentos.forEach((t,i)=>{
+    const k = plChave(t);
+    if(contagem[k] > 0){ contagem[k]--; repetidos++; return; }
+    if(!nomes.has(t.categoria)){
+      nomes.add(t.categoria);
+      cats.push(Object.assign({nome:t.categoria}, sugerirIconeCor(t.categoria, cats.length)));
+      novas.push(t.categoria);
+    }
+    cache.push({
+      id: 'tx-' + Date.now() + '-' + Math.floor(Math.random()*100000) + '-' + i,
+      data: t.data, tipo: t.tipo, valor: t.valor, categoria: t.categoria, descricao: t.descricao
+    });
+    adicionados++;
+  });
+  if(novas.length) setCategorias(cats);
+  if(adicionados) setCache(cache);   // o setCache agenda o salvamento na nuvem
+  return {adicionados, repetidos, novas};
+}
+
+// Categorias da planilha que ainda não existem no app (para avisar antes).
+function plCategoriasNovas(lancamentos){
+  const nomes = new Set(getCategorias().map(c=>c.nome));
+  const novas = [];
+  lancamentos.forEach(t=>{ if(!nomes.has(t.categoria)){ nomes.add(t.categoria); novas.push(t.categoria); } });
+  return novas;
+}
+
+/* --- 6. Tela de conferência ------------------------------------------- */
+
+let plArquivo = null;   // {nome, cabecalhos, linhas}
+let plMapa = null;
+let plFormato = 'sinal';
+
+const PL_FORMATOS = [
+  {v:'tipo',  txt:'Uma coluna de valor + uma coluna dizendo se é entrada ou saída'},
+  {v:'sinal', txt:'Uma coluna de valor só (negativo = saída)'},
+  {v:'duas',  txt:'Duas colunas: uma de entradas e outra de saídas'},
+];
+
+function plCamposDoFormato(){
+  if(plFormato==='duas') return ['data','entrada','saida','categoria','descricao'];
+  if(plFormato==='tipo') return ['data','valor','tipo','categoria','descricao'];
+  return ['data','valor','categoria','descricao'];
+}
+
+function plAbrirModal(){
+  plMapa = plAdivinharColunas(plArquivo.cabecalhos);
+  plFormato = plDetectarFormato(plMapa);
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+  <div class="modal-bg" onclick="if(event.target===this) plFecharImport()">
+    <div class="modal">
+      <h3><span class="icn" data-icon="sheet" data-size="17"></span> Importar planilha</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">${esc(plArquivo.nome||'planilha')} · ${plArquivo.linhas.length} linha(s)</p>
+      <div class="field">
+        <label>Como sua planilha está montada?</label>
+        <select id="plFormato">${PL_FORMATOS.map(f=>`<option value="${f.v}"${f.v===plFormato?' selected':''}>${f.txt}</option>`).join('')}</select>
+      </div>
+      <div id="plColunas" style="margin-top:12px;"></div>
+      <div id="plResultado" style="margin-top:14px;"></div>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn-secondary" onclick="plFecharImport()">Cancelar</button>
+        <button class="btn-primary" id="plConfirmar" style="width:auto;">Importar</button>
+      </div>
+    </div>
+  </div>`;
+  renderIcons();
+  document.getElementById('plFormato').addEventListener('change', e=>{ plFormato = e.target.value; plRenderColunas(); });
+  document.getElementById('plConfirmar').addEventListener('click', plConfirmarImport);
+  plRenderColunas();
+}
+
+function plFecharImport(){
+  document.getElementById('modalRoot').innerHTML='';
+  plArquivo = null;
+}
+
+function plRenderColunas(){
+  const campos = plCamposDoFormato();
+  const opcoes = (sel)=> '<option value="-1"'+(sel<0?' selected':'')+'>— não tenho essa coluna —</option>' +
+    plArquivo.cabecalhos.map((h,i)=>`<option value="${i}"${i===sel?' selected':''}>${esc(h || ('coluna '+(i+1)))}</option>`).join('');
+  document.getElementById('plColunas').innerHTML =
+    '<label style="margin-bottom:6px;">De onde vem cada informação</label>' +
+    campos.map(k=>{
+      const campo = PL_CAMPOS.find(c=>c.k===k);
+      return `<div class="field" style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:13px;flex:0 0 40%;">${campo.rotulo}</span>
+        <select data-pl="${k}" style="flex:1;">${opcoes(plMapa[k])}</select>
+      </div>`;
+    }).join('');
+  document.querySelectorAll('#plColunas select[data-pl]').forEach(s=>{
+    s.addEventListener('change', ()=>{ plMapa[s.getAttribute('data-pl')] = parseInt(s.value,10); plRenderPrevia(); });
+  });
+  plRenderPrevia();
+}
+
+function plRenderPrevia(){
+  const r = plMontar(plArquivo.linhas, plMapa, plFormato);
+  window.__plPrevia = r;
+  const box = document.getElementById('plResultado');
+  const btn = document.getElementById('plConfirmar');
+  if(!r.lancamentos.length){
+    btn.disabled = true; btn.style.opacity = .5;
+    box.innerHTML = `<div class="banner">Não consegui montar nenhum lançamento. Confira acima de qual coluna vem a <b>data</b> e de qual vem o <b>valor</b> — são as duas obrigatórias.</div>`;
+    return;
+  }
+  btn.disabled = false; btn.style.opacity = 1;
+  btn.textContent = 'Importar ' + r.lancamentos.length + ' lançamento(s)';
+  const entradas = r.lancamentos.filter(t=>t.tipo==='entrada').length;
+  const saidas = r.lancamentos.length - entradas;
+  const novas = plCategoriasNovas(r.lancamentos);
+  const ignoradas = r.semData + r.semValor;
+  const previa = r.lancamentos.slice(0,4).map(t=>`
+    <div class="lista-item">${iconeHtml(t.categoria,30)}
+      <div style="flex:1;min-width:0;"><div class="desc">${esc(t.descricao)}</div><div class="cat">${esc(t.categoria)} · ${t.data.split('-').reverse().join('/')}</div></div>
+      <div class="val ${t.tipo}">${t.tipo==='entrada'?'+':'-'} ${fmtMoeda(t.valor)}</div>
+    </div>`).join('');
+  box.innerHTML = `
+    <label>Confira antes de importar</label>
+    <div class="card" style="margin-bottom:8px;">${previa}
+      ${r.lancamentos.length>4 ? `<div class="cat" style="text-align:center;padding-top:8px;">… e mais ${r.lancamentos.length-4} lançamento(s)</div>` : ''}
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.7;">
+      <div><span class="status-ok">${entradas}</span> entrada(s) · <span class="status-erro">${saidas}</span> saída(s)</div>
+      ${ignoradas ? `<div>${ignoradas} linha(s) da planilha serão puladas (sem data ou sem valor).</div>` : ''}
+      ${r.tipoChutado ? `<div>${r.tipoChutado} linha(s) não diziam claramente se eram entrada ou saída — vão entrar como <b>saída</b>. Dá pra corrigir depois no Extrato.</div>` : ''}
+      ${novas.length ? `<div>Categorias novas que serão criadas: <b>${novas.slice(0,8).map(esc).join(', ')}</b>${novas.length>8?' e mais '+(novas.length-8):''}.</div>` : ''}
+    </div>`;
+}
+
+function plConfirmarImport(){
+  const r = window.__plPrevia;
+  if(!r || !r.lancamentos.length) return;
+  const g = plGravar(r.lancamentos);
+  plFecharImport();
+  popularFiltrosData();
+  popularCategorias(document.getElementById('inCategoria'), false);
+  if(document.getElementById('tab-ajustes').classList.contains('active')) renderListaCategorias();
+  render();
+  let msg;
+  if(g.adicionados){
+    msg = g.adicionados + ' lançamento(s) importado(s) com sucesso!';
+    if(g.novas.length) msg += '\n\nCategorias criadas automaticamente: ' + g.novas.join(', ') + '.';
+    if(g.repetidos) msg += '\n\n' + g.repetidos + ' lançamento(s) já estavam na sua conta e foram ignorados.';
+    msg += '\n\nJá estão sendo salvos na nuvem.';
+  } else {
+    msg = 'Nenhum lançamento novo — tudo dessa planilha já estava na sua conta.';
+  }
+  alert(msg);
+}
+
+document.getElementById('btnImportarPlanilha').addEventListener('click', ()=>{
+  document.getElementById('inputPlanilha').click();
+});
+document.getElementById('inputPlanilha').addEventListener('change', async (ev)=>{
+  const arq = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if(!arq) return;
+  toast('Lendo a planilha…');
+  try{
+    plArquivo = await plLerArquivo(arq);
+    if(!plArquivo.cabecalhos.length || !plArquivo.linhas.length){
+      alert('Não encontrei lançamentos nessa planilha.\n\nEla precisa ter uma linha com os nomes das colunas (Data, Valor, Descrição…) e as linhas de lançamento embaixo.');
+      plArquivo = null; return;
+    }
+    plAbrirModal();
+  }catch(e){
+    plArquivo = null;
+    alert(e && e.message ? e.message : 'Não consegui ler este arquivo.');
+  }
 });
 
 /* =================== INICIALIZAÇÃO =================== */
