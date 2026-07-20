@@ -475,11 +475,29 @@
   </div>
 
   <div class="card">
+    <h3><span class="icn" data-icon="shield" data-size="17"></span> Cópias de segurança</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">O Controlei guarda sozinho uma cópia por dia dos seus dados, e mantém as 3 últimas. Serve para você voltar atrás se apagar algo sem querer.</p>
+    <button class="btn-secondary" style="width:100%;" id="btnVerCopias">Voltar para uma cópia anterior</button>
+    <div id="statusCopiaArquivo" style="font-size:12px;color:var(--muted);margin-top:12px;"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:8px;" id="btnCopiaArquivo">Também gravar num arquivo meu</button>
+  </div>
+
+  <div class="card">
     <h3><span class="icn" data-icon="download" data-size="17"></span> Backup local</h3>
     <button class="btn-secondary" style="width:100%;" id="btnExportar">Baixar backup (.json)</button>
     <button class="btn-secondary" style="width:100%;margin-top:8px;" id="btnRestaurar">Restaurar backup (.json)</button>
     <input type="file" id="inputRestaurar" accept=".json,application/json" style="display:none;">
     <p style="font-size:12px;color:var(--muted);margin:8px 0 0;">Restaurar serve para trazer seus lançamentos de um backup baixado antes. Nada é apagado: lançamentos repetidos são ignorados.</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="icn" data-icon="lock" data-size="17"></span> Privacidade e seus direitos</h3>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">
+      <a href="privacidade.html" target="_blank" style="color:var(--accent);">Política de Privacidade</a> ·
+      <a href="termos.html" target="_blank" style="color:var(--accent);">Termos de Uso</a>
+    </p>
+    <button class="btn-danger" style="width:100%;" id="btnApagarConta">Apagar minha conta e meus dados</button>
+    <p style="font-size:12px;color:var(--muted);margin:8px 0 0;">Apaga em definitivo sua conta, seus lançamentos e as cópias de segurança. Não tem como desfazer. Baixe um backup antes, se quiser guardar.</p>
   </div>
 </div>
 
@@ -515,7 +533,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'venda-2026-07-20.3'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'venda-2026-07-20.4'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -829,10 +847,219 @@ function traduzErro(e){
     + (bruto && bruto !== '{}' ? ' — detalhe: ' + bruto : '');
 }
 
+/* ---------- REGISTRO DE APAGADOS (lápides) ----------
+   Quando alguém apaga um lançamento, não basta sumir com ele da lista daqui: o
+   outro aparelho ainda tem esse lançamento e, na hora de juntar, ele voltaria do
+   além. Por isso guardamos o id do que foi apagado, com a data. Depois de 180
+   dias a lápide é descartada (a essa altura todos os aparelhos já sincronizaram)
+   para o pacote não crescer para sempre. */
+const LS_APAGADOS = 'mf_apagados';
+const DIAS_LAPIDE = 180;
+function getApagados(){
+  try{ const a = JSON.parse(localStorage.getItem(LS_APAGADOS)); return (a && typeof a==='object') ? a : {tx:{}, rec:{}, cat:{}}; }
+  catch(e){ return {tx:{}, rec:{}, cat:{}}; }
+}
+function setApagados(a){ localStorage.setItem(LS_APAGADOS, JSON.stringify(a)); }
+function registrarApagado(tipo, chave){
+  const a = getApagados();
+  if(!a[tipo]) a[tipo] = {};
+  a[tipo][String(chave)] = new Date().toISOString();
+  setApagados(a);
+}
+function podarLapides(a){
+  const limite = Date.now() - DIAS_LAPIDE*86400000;
+  const saida = {tx:{}, rec:{}, cat:{}};
+  ['tx','rec','cat'].forEach(t=>{
+    Object.keys((a && a[t]) || {}).forEach(k=>{
+      const q = Date.parse(a[t][k]);
+      if(!isFinite(q) || q >= limite) saida[t][k] = a[t][k];
+    });
+  });
+  return saida;
+}
+
 // Tudo que o usuário tem vai num pacote só (mesmo desenho jsonb do Mesa)
 function montaDados(){
   return { transacoes:getCache(), categorias:getCategorias(), orcamentos:getOrcamentos(),
-           meta:getMeta(), recorrentes:getRecorrentes(), salvoEm:new Date().toISOString() };
+           meta:getMeta(), recorrentes:getRecorrentes(), apagados:podarLapides(getApagados()),
+           salvoEm:new Date().toISOString() };
+}
+
+/* ---------- JUNTAR EM VEZ DE SOBRESCREVER ----------
+   O PERIGO QUE ISTO RESOLVE: antes, salvar jogava o pacote inteiro por cima do
+   que estava na nuvem. Com o app aberto no celular E no computador, quem salvasse
+   por último apagava os lançamentos do outro, sem aviso nenhum. Num app de
+   dinheiro isso é o pior tipo de defeito, porque a pessoa só descobre semanas
+   depois e não tem como provar.
+
+   Agora os dois lados são juntados: cada lançamento tem id próprio e carimbo de
+   quando foi mexido pela última vez; ganha o mais recente. O que foi apagado de
+   verdade fica de fora pelas lápides acima.
+
+   Função PURA de propósito (não lê nem escreve nada) — é o que permite testá-la
+   no robô sem navegador. */
+function juntarListas(remota, local, chave, lapides){
+  const mapa = new Map();
+  const por = (item)=> item && item[chave]!=null ? String(item[chave]) : null;
+  const quando = (item)=>{
+    const q = item && (item.mexidoEm || item.criadoEm);
+    const n = q ? Date.parse(q) : NaN;
+    return isFinite(n) ? n : 0;   // sem carimbo = registro antigo, perde do carimbado
+  };
+  (Array.isArray(remota)?remota:[]).forEach(it=>{ const k = por(it); if(k) mapa.set(k, it); });
+  (Array.isArray(local)?local:[]).forEach(it=>{
+    const k = por(it); if(!k) return;
+    const atual = mapa.get(k);
+    if(!atual || quando(it) >= quando(atual)) mapa.set(k, it);
+  });
+  const fora = lapides || {};
+  return Array.from(mapa.values()).filter(it => !Object.prototype.hasOwnProperty.call(fora, por(it)));
+}
+
+function juntarDados(remoto, local){
+  remoto = (remoto && typeof remoto==='object') ? remoto : {};
+  local  = (local  && typeof local ==='object') ? local  : {};
+  // As lápides dos dois lados valem: apagar num aparelho tem que valer no outro.
+  const lap = podarLapides({
+    tx:  Object.assign({}, (remoto.apagados||{}).tx,  (local.apagados||{}).tx),
+    rec: Object.assign({}, (remoto.apagados||{}).rec, (local.apagados||{}).rec),
+    cat: Object.assign({}, (remoto.apagados||{}).cat, (local.apagados||{}).cat),
+  });
+  const maisNovo = (a, b, campoData)=>{
+    const qa = Date.parse((a||{})[campoData] || 0), qb = Date.parse((b||{})[campoData] || 0);
+    return (isFinite(qb) ? qb : 0) >= (isFinite(qa) ? qa : 0) ? b : a;
+  };
+  return {
+    transacoes:  juntarListas(remoto.transacoes,  local.transacoes,  'id',   lap.tx),
+    recorrentes: juntarListas(remoto.recorrentes, local.recorrentes, 'id',   lap.rec),
+    categorias:  juntarListas(remoto.categorias,  local.categorias,  'nome', lap.cat),
+    // Orçamento e meta são pequenos e raramente mexidos nos dois ao mesmo tempo:
+    // vale o pacote salvo mais recentemente.
+    orcamentos: (maisNovo(remoto, local, 'salvoEm') === local ? local.orcamentos : remoto.orcamentos) || {},
+    meta:       (maisNovo(remoto, local, 'salvoEm') === local ? local.meta       : remoto.meta) || null,
+    apagados: lap,
+    salvoEm: new Date().toISOString()
+  };
+}
+
+// Escreve o pacote juntado aqui no aparelho SEM disparar um novo salvamento
+// (senão dois aparelhos ficariam se cutucando em looping).
+function aplicarDados(d){
+  if(!d || typeof d !== 'object') return;
+  carregandoNuvem = true;
+  try{
+    if(Array.isArray(d.transacoes)) setCache(d.transacoes);
+    if(Array.isArray(d.categorias) && d.categorias.length) setCategorias(d.categorias);
+    if(d.orcamentos) setOrcamentos(d.orcamentos);
+    if(d.meta) setMeta(d.meta);
+    if(Array.isArray(d.recorrentes)) setRecorrentes(d.recorrentes);
+    if(d.apagados) setApagados(d.apagados);
+  } finally { carregandoNuvem = false; }
+}
+
+/* ---------- CÓPIAS DE SEGURANÇA ----------
+   Três frentes, porque nenhuma sozinha cobre tudo:
+
+   (1) NA NUVEM: uma cópia por dia, as 3 últimas. É a que vale para todo mundo,
+       em qualquer aparelho, e é de onde o cliente volta atrás sozinho se apagar
+       algo sem querer. Guardada por nós porque o backup do Supabase custa
+       US$ 25/mês — inviável para um produto de R$ 49,90 por ano.
+
+   (2) NUM ARQUIVO DO COMPUTADOR: se ele autorizar uma vez, o app regrava
+       sozinho o MESMO arquivo (não fica enchendo a pasta de cópias). Só
+       funciona em Chrome/Edge no computador — celular nenhum permite isso, nem
+       Android nem iPhone. É limitação dos navegadores, não falta de vontade.
+
+   (3) BOTÃO DE BAIXAR, que já existia, para quem quiser guardar onde quiser. */
+
+let ultimaCopiaNuvem = '';
+async function guardarCopiaDeSeguranca(pacote){
+  const hoje = hojeISO();
+  // Uma vez por dia por aparelho já basta — não adianta martelar o servidor.
+  if(ultimaCopiaNuvem === hoje) { gravarCopiaNoArquivo(pacote); return; }
+  try{
+    const r = await sbCli.rpc('guardar_copia', {conteudo: pacote});
+    if(!r.error) ultimaCopiaNuvem = hoje;
+  }catch(e){ /* cópia é um extra: se falhar, não atrapalha o salvamento normal */ }
+  gravarCopiaNoArquivo(pacote);
+}
+
+async function listarCopias(){
+  const r = await sbCli.from('copias').select('dia, criado_em, dados').order('dia', {ascending:false});
+  if(r.error) throw r.error;
+  return r.data || [];
+}
+
+/* ---- Cópia automática num arquivo do computador ----
+   O navegador guarda a "autorização" que ele deu para aquele arquivo. Guardamos
+   o endereço do arquivo no banco interno do navegador (IndexedDB), porque isso
+   não cabe no armazenamento comum. */
+const IDB_NOME = 'controlei-backup', IDB_CHAVE = 'arquivo';
+function idbAbrir(){
+  return new Promise((ok, falha)=>{
+    const req = indexedDB.open(IDB_NOME, 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore('h');
+    req.onsuccess = ()=> ok(req.result);
+    req.onerror = ()=> falha(req.error);
+  });
+}
+function idbGuardar(valor){
+  return idbAbrir().then(db=> new Promise((ok, falha)=>{
+    const t = db.transaction('h','readwrite');
+    t.objectStore('h').put(valor, IDB_CHAVE);
+    t.oncomplete = ()=> ok(true); t.onerror = ()=> falha(t.error);
+  }));
+}
+function idbLer(){
+  return idbAbrir().then(db=> new Promise((ok)=>{
+    const t = db.transaction('h','readonly');
+    const req = t.objectStore('h').get(IDB_CHAVE);
+    req.onsuccess = ()=> ok(req.result || null);
+    req.onerror = ()=> ok(null);
+  })).catch(()=>null);
+}
+
+function computadorPermiteCopiaAutomatica(){
+  return typeof window.showSaveFilePicker === 'function';
+}
+async function escolherArquivoDeCopia(){
+  if(!computadorPermiteCopiaAutomatica()){
+    alert('Este aparelho não permite gravar direto num arquivo.\n\nÉ limitação do navegador: só o Chrome e o Edge, no computador, deixam um site regravar o mesmo arquivo sozinho. Nenhum celular permite — nem Android, nem iPhone.\n\nSuas cópias na nuvem continuam sendo feitas todo dia normalmente, e você pode baixar uma cópia quando quiser pelo botão abaixo.');
+    return;
+  }
+  try{
+    const arq = await window.showSaveFilePicker({
+      suggestedName: 'controlei-backup.json',
+      types: [{description:'Backup do Controlei', accept:{'application/json':['.json']}}]
+    });
+    await idbGuardar(arq);
+    await gravarCopiaNoArquivo(montaDados());
+    renderAjustes();
+    alert('Pronto. A partir de agora o Controlei regrava esse mesmo arquivo sozinho, sempre que você lançar algo.\n\nEle não cria cópias novas: é sempre o mesmo arquivo, atualizado por cima.');
+  }catch(e){ /* o usuário cancelou a janela */ }
+}
+async function desligarCopiaEmArquivo(){
+  await idbGuardar(null);
+  renderAjustes();
+  toast('Cópia em arquivo desligada');
+}
+async function gravarCopiaNoArquivo(pacote){
+  if(!computadorPermiteCopiaAutomatica()) return;
+  try{
+    const arq = await idbLer();
+    if(!arq) return;
+    // A autorização pode ter caducado (ex.: o navegador foi fechado). Se caducou,
+    // não insistimos com uma janela na cara dele do nada — fica para quando ele
+    // voltar em Ajustes.
+    if(arq.queryPermission){
+      const p = await arq.queryPermission({mode:'readwrite'});
+      if(p !== 'granted') return;
+    }
+    const w = await arq.createWritable();
+    await w.write(JSON.stringify(pacote, null, 2));
+    await w.close();
+    localStorage.setItem('mf_copia_arquivo_em', new Date().toISOString());
+  }catch(e){ /* nunca deixar a cópia derrubar o uso normal do app */ }
 }
 
 let salvaTimer = null;
@@ -841,28 +1068,44 @@ function agendaSalvarNuvem(){
   clearTimeout(salvaTimer);
   salvaTimer = setTimeout(salvaNuvem, 1200); // mesma "pausa inteligente" do Mesa
 }
+let salvandoAgora = false;
 async function salvaNuvem(){
-  if(!sbUser) return;
+  if(!sbUser || salvandoAgora) return;
+  salvandoAgora = true;
   try{
-    const r = await sbCli.from('financas').upsert({ user_id:sbUser.id, dados:montaDados(), atualizado_em:new Date().toISOString() });
+    // 1) Lê o que está na nuvem NESTE instante (pode ter mudado no outro aparelho)
+    const atual = await sbCli.from('financas').select('dados').eq('user_id', sbUser.id).maybeSingle();
+    if(atual.error) throw atual.error;
+    const remoto = atual.data && atual.data.dados;
+    // 2) Junta os dois lados
+    const juntado = juntarDados(remoto, montaDados());
+    // 3) Grava o resultado e deixa este aparelho igual ao que foi gravado
+    const r = await sbCli.from('financas').upsert({ user_id:sbUser.id, dados:juntado, atualizado_em:new Date().toISOString() });
     if(r.error) throw r.error;
+    aplicarDados(juntado);
+    guardarCopiaDeSeguranca(juntado);   // cópia do dia, para poder voltar atrás
     marcaStatus(true);
-  }catch(e){ marcaStatus(false); agendaSalvarNuvem(); }
+    // O render fica FORA da conta de erro: se ele falhar por algum motivo de
+    // tela, o salvamento já deu certo e não pode ser repetido em looping.
+    try{ render(); }catch(_){}
+  }catch(e){
+    marcaStatus(false);
+    setTimeout(()=>{ salvandoAgora = false; agendaSalvarNuvem(); }, 4000); // tenta de novo
+    return;
+  }
+  salvandoAgora = false;
 }
 async function baixaNuvem(){
   const r = await sbCli.from('financas').select('dados').eq('user_id', sbUser.id).maybeSingle();
   if(r.error) throw r.error;
   const d = r.data && r.data.dados;
-  if(d && typeof d === 'object'){
-    carregandoNuvem = true;
-    try{
-      if(Array.isArray(d.transacoes)) setCache(d.transacoes);
-      if(Array.isArray(d.categorias) && d.categorias.length) setCategorias(d.categorias);
-      if(d.orcamentos) setOrcamentos(d.orcamentos);
-      if(d.meta) setMeta(d.meta);
-      if(Array.isArray(d.recorrentes)) setRecorrentes(d.recorrentes);
-    } finally { carregandoNuvem = false; }
-  }
+  // Junta também na descida: se este aparelho estava sem internet e lançou coisa,
+  // baixar não pode varrer o que ele fez enquanto esteve offline.
+  const juntado = juntarDados(d, montaDados());
+  aplicarDados(juntado);
+  // Se a junção mostrou que este aparelho tinha algo que a nuvem não tinha, sobe.
+  const local = montaDados();
+  if(JSON.stringify(local.transacoes) !== JSON.stringify((d||{}).transacoes)) agendaSalvarNuvem();
 }
 function marcaStatus(ok){
   const el = document.getElementById('statusConexao');
@@ -1024,6 +1267,7 @@ async function depoisDoLogin(){
 async function adicionarTransacao(tx){
   // O id nasce definitivo aqui mesmo — não há mais servidor pra trocá-lo.
   tx.id = 'tx-' + Date.now() + '-' + Math.floor(Math.random()*100000);
+  tx.mexidoEm = new Date().toISOString();   // carimbo que decide quem ganha ao juntar aparelhos
   const cache = getCache();
   cache.push(Object.assign({}, tx));
   setCache(cache); // o setCache agenda o salvamento na nuvem sozinho
@@ -1033,14 +1277,18 @@ async function adicionarTransacao(tx){
 function apagarTransacao(id){
   const cache = getCache();
   const idx = cache.findIndex(t=>String(t.id)===String(id));
-  if(idx>-1){ cache.splice(idx,1); setCache(cache); }
+  if(idx>-1){
+    cache.splice(idx,1);
+    registrarApagado('tx', id);   // sem a lápide, o outro aparelho traria de volta
+    setCache(cache);
+  }
   render();
 }
 
 function editarTransacao(tx){
   const cache = getCache();
   const idx = cache.findIndex(t=>String(t.id)===String(tx.id));
-  if(idx>-1){ cache[idx] = Object.assign({}, cache[idx], tx); setCache(cache); }
+  if(idx>-1){ cache[idx] = Object.assign({}, cache[idx], tx, {mexidoEm:new Date().toISOString()}); setCache(cache); }
   render();
 }
 
@@ -1800,6 +2048,7 @@ function renderRecorrentes(){
   }).join('');
 }
 function removerRecorrente(id){
+  registrarApagado('rec', id);   // para não voltar do outro aparelho
   setRecorrentes(getRecorrentes().filter(r=>r.id!==id));
   renderRecorrentes();
 }
@@ -1961,7 +2210,104 @@ function renderAjustes(){
   document.getElementById('contaEmail').textContent = sbUser ? sbUser.email : '—';
   document.getElementById('contaAssinatura').textContent = textoAssinatura();
   renderListaCategorias();
+  renderStatusCopiaArquivo();
 }
+
+async function renderStatusCopiaArquivo(){
+  const alvo = document.getElementById('statusCopiaArquivo');
+  const botao = document.getElementById('btnCopiaArquivo');
+  if(!alvo || !botao) return;
+  if(!computadorPermiteCopiaAutomatica()){
+    alvo.textContent = 'Gravar direto num arquivo seu só funciona no computador (Chrome ou Edge). Nenhum celular permite — é limitação do navegador. Suas cópias na nuvem continuam sendo feitas normalmente.';
+    botao.style.display = 'none';
+    return;
+  }
+  botao.style.display = '';
+  const arq = await idbLer();
+  if(arq){
+    const quando = localStorage.getItem('mf_copia_arquivo_em');
+    alvo.innerHTML = '<span class="status-ok">Gravando sozinho em ' + esc(arq.name || 'seu arquivo') + '</span>'
+      + (quando ? '<br>Última gravação: ' + new Date(quando).toLocaleString('pt-BR') : '');
+    botao.textContent = 'Desligar a gravação em arquivo';
+    botao.onclick = desligarCopiaEmArquivo;
+  } else {
+    alvo.textContent = 'Se quiser, o Controlei também regrava sozinho um arquivo escolhido por você — sempre o mesmo arquivo, sem criar cópias novas.';
+    botao.textContent = 'Também gravar num arquivo meu';
+    botao.onclick = escolherArquivoDeCopia;
+  }
+}
+
+/* ---------- Voltar para uma cópia anterior ---------- */
+async function abrirCopias(){
+  let copias;
+  try{ copias = await listarCopias(); }
+  catch(e){ alert('Não consegui buscar suas cópias agora. Verifique a internet e tente de novo.'); return; }
+  if(!copias.length){
+    alert('Ainda não há cópias guardadas.\n\nA primeira é criada automaticamente assim que você lançar algo. Depois disso, uma por dia.');
+    return;
+  }
+  const linhas = copias.map((c,i)=>{
+    const qtd = (c.dados && Array.isArray(c.dados.transacoes)) ? c.dados.transacoes.length : 0;
+    const d = c.dia.split('-').reverse().join('/');
+    return `<div class="lista-item">
+      <div style="flex:1;min-width:0;">
+        <div class="desc">Cópia de ${d}</div>
+        <div class="cat">${qtd} lançamento(s) guardados</div>
+      </div>
+      <button class="btn-secondary" onclick="restaurarCopia(${i})">Usar esta</button>
+    </div>`;
+  }).join('');
+  window.__copias = copias;
+  document.getElementById('modalRoot').innerHTML = `
+  <div class="modal-bg" onclick="if(event.target===this) document.getElementById('modalRoot').innerHTML=''">
+    <div class="modal">
+      <h3>Voltar para uma cópia anterior</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Escolha o dia que você quer trazer de volta. Nada é apagado: os lançamentos da cópia são somados aos que você já tem, e os repetidos são ignorados.</p>
+      ${linhas}
+      <button class="btn-secondary" style="width:100%;margin-top:14px;" onclick="document.getElementById('modalRoot').innerHTML=''">Fechar</button>
+    </div>
+  </div>`;
+}
+function restaurarCopia(i){
+  const c = (window.__copias||[])[i];
+  if(!c || !c.dados) return;
+  const d = c.dia.split('-').reverse().join('/');
+  if(!confirm('Trazer de volta os lançamentos da cópia de ' + d + '?\n\nNada do que você tem hoje será apagado — os dois são somados, sem repetir.')) return;
+  // Junta a cópia com o que existe hoje. As lápides da cópia NÃO entram: se ele
+  // está pedindo uma cópia velha de volta, é justamente para recuperar coisa
+  // apagada; respeitar o "apagado" de lá anularia o pedido dele.
+  const copia = Object.assign({}, c.dados, {apagados:{tx:{},rec:{},cat:{}}});
+  const juntado = juntarDados(copia, Object.assign({}, montaDados(), {apagados:{tx:{},rec:{},cat:{}}}));
+  aplicarDados(juntado);
+  setApagados({tx:{},rec:{},cat:{}});
+  agendaSalvarNuvem();
+  document.getElementById('modalRoot').innerHTML = '';
+  render();
+  alert('Pronto! Os lançamentos da cópia de ' + d + ' estão de volta.');
+}
+document.getElementById('btnVerCopias').addEventListener('click', abrirCopias);
+
+/* ---------- Apagar a conta (direito garantido pela LGPD) ---------- */
+document.getElementById('btnApagarConta').addEventListener('click', async ()=>{
+  const email = sbUser ? sbUser.email : '';
+  if(!confirm('APAGAR SUA CONTA\n\nIsto apaga em definitivo:\n· todos os seus lançamentos\n· suas categorias, metas e orçamentos\n· as cópias de segurança\n· sua conta de acesso\n\nNão tem como desfazer, e nem eu consigo recuperar depois.\n\nQuer mesmo continuar?')) return;
+  const conf = prompt('Para confirmar, digite seu e-mail:\n' + email);
+  if(!conf || conf.trim().toLowerCase() !== String(email).toLowerCase()){
+    alert('E-mail não confere. Nada foi apagado.');
+    return;
+  }
+  try{
+    const r = await sbCli.rpc('apagar_minha_conta');
+    if(r.error) throw r.error;
+    try{ localStorage.clear(); sessionStorage.clear(); }catch(e){}
+    try{ await idbGuardar(null); }catch(e){}
+    try{ await sbCli.auth.signOut(); }catch(e){}
+    alert('Sua conta e seus dados foram apagados. Obrigado por ter usado o Controlei.');
+    location.reload();
+  }catch(e){
+    alert('Não consegui apagar agora: ' + traduzErro(e) + '\n\nNada foi perdido. Tente de novo, ou fale comigo pelo e-mail da Política de Privacidade que eu apago manualmente.');
+  }
+});
 
 document.getElementById('btnSincronizar').addEventListener('click', async ()=>{ await sincronizar(); toast('Sincronizado'); });
 document.getElementById('btnSair').addEventListener('click', sairApp);
@@ -1972,6 +2318,7 @@ function renderListaCategorias(){
   cont.innerHTML = cats.map(c=>`<span class="categoria-chip"><span class="dot" style="background:${c.cor};">${icon(c.icone,12,'white')}</span>${c.nome} <a href="#" onclick="removerCategoria('${c.nome}');return false;" style="color:var(--vermelho);text-decoration:none;">✕</a></span>`).join('');
 }
 function removerCategoria(nome){
+  registrarApagado('cat', nome);   // para não voltar do outro aparelho
   setCategorias(getCategorias().filter(x=>x.nome!==nome));
   renderListaCategorias();
   popularCategorias(document.getElementById('inCategoria'), false);
