@@ -205,7 +205,7 @@
       <input type="checkbox" id="lg-manter" checked style="width:auto;"> Continuar conectado neste aparelho
     </label>
     <button class="btn-primary btn-login" id="lg-btn" onclick="entrarApp()">Entrar</button>
-    <button class="lnk-login" id="lg-alternar" onclick="alternarModoLogin()">Não tem conta? Criar conta grátis (7 dias de teste)</button>
+    <button class="lnk-login" id="lg-alternar" onclick="alternarModoLogin()">Não tem conta? Criar conta</button>
     <button class="lnk-login" onclick="esqueciSenhaApp()">Esqueci minha senha</button>
     <div class="msg-login" id="lg-msg"></div>
     <div class="login-rodape">by Bruno Kaminski</div>
@@ -534,7 +534,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'fluxo-2026-07-20.7'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'fluxo-2026-07-20.8'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -1168,9 +1168,9 @@ function msgLogin(txt, tipo){
 }
 function alternarModoLogin(){
   modoCriarConta = !modoCriarConta;
-  document.getElementById('loginSub').textContent = modoCriarConta ? 'Crie sua conta — 7 dias de teste grátis' : 'Entre na sua conta';
+  document.getElementById('loginSub').textContent = modoCriarConta ? 'Crie sua conta' : 'Entre na sua conta';
   document.getElementById('lg-btn').textContent = modoCriarConta ? 'Criar conta' : 'Entrar';
-  document.getElementById('lg-alternar').textContent = modoCriarConta ? 'Já tem conta? Entrar' : 'Não tem conta? Criar conta grátis (7 dias de teste)';
+  document.getElementById('lg-alternar').textContent = modoCriarConta ? 'Já tem conta? Entrar' : 'Não tem conta? Criar conta';
   document.getElementById('lg-msg').className = 'msg-login';
 }
 function alternaSenhaCampo(idCampo, botao){
