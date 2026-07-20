@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluxo — controle seus gastos falando</title>
+<meta name="description" content="Fale 'gastei 35 reais no mercado' e pronto. Um app simples de controle de gastos, feito por Bruno Kaminski.">
+<meta name="theme-color" content="#070D1A">
+<link rel="icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070D1A; --card:rgba(255,255,255,.035); --borda:rgba(255,255,255,.08);
+    --borda-forte:rgba(255,255,255,.14); --texto:#EAF0FA; --muted:#8DA0BF;
+    --azul:#2563EB; --azul-claro:#60A5FA; --verde:#34D399; --vermelho:#F87171;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--texto);line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px;}
+  .glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;}
+  .glow-1{width:560px;height:560px;background:rgba(37,99,235,.16);top:-180px;left:50%;transform:translateX(-50%);}
+  .glow-2{width:420px;height:420px;background:rgba(96,165,250,.07);top:52%;right:-160px;}
+  main{position:relative;z-index:1;}
+
+  .topo{display:flex;align-items:center;justify-content:space-between;padding:22px 0;}
+  .marca{display:flex;flex-direction:column;text-decoration:none;color:var(--texto);}
+  .marca strong{font-size:19px;font-weight:800;letter-spacing:2px;}
+  .marca small{font-size:10.5px;color:var(--muted);font-weight:500;margin-top:-2px;}
+
+  .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;padding:44px 0 66px;}
+  .selo{display:inline-flex;align-items:center;gap:8px;background:rgba(37,99,235,.13);border:1px solid rgba(96,165,250,.28);color:#A9C8F5;font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:99px;margin-bottom:20px;}
+  .selo .ponto{width:7px;height:7px;border-radius:50%;background:var(--verde);box-shadow:0 0 8px var(--verde);}
+  h1{font-size:clamp(34px,4.6vw,50px);font-weight:900;line-height:1.12;letter-spacing:-1.2px;}
+  h1 em{font-style:normal;background:linear-gradient(90deg,#60A5FA,#93C5FD);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .hero p{margin-top:18px;font-size:17px;color:var(--muted);max-width:450px;}
+  .hero-botoes{display:flex;gap:14px;margin-top:32px;flex-wrap:wrap;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;font-weight:700;font-size:15.5px;padding:15px 30px;border-radius:14px;transition:.22s;border:none;cursor:pointer;font-family:inherit;}
+  .btn-azul{background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;box-shadow:0 8px 28px rgba(37,99,235,.38);}
+  .btn-azul:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(37,99,235,.5);}
+  .btn-ghost{border:1px solid var(--borda-forte);color:var(--texto);background:transparent;}
+  .btn-ghost:hover{background:rgba(255,255,255,.05);}
+  .hero-nota{margin-top:14px;font-size:13px;color:var(--muted);}
+
+  .fone-area{display:flex;justify-content:center;}
+  .fone{width:280px;background:#0D1526;border:1px solid var(--borda-forte);border-radius:38px;padding:12px;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 8px rgba(255,255,255,.02);transform:rotate(2.5deg);}
+  .fone-tela{background:#0F172A;border-radius:28px;overflow:hidden;}
+  .f-head{background:linear-gradient(180deg,#0F172A,#111C33);padding:18px 16px 14px;text-align:center;}
+  .f-logo{font-size:13px;font-weight:800;letter-spacing:2.5px;color:#fff;}
+  .f-saldo{font-size:24px;font-weight:800;margin-top:6px;color:#fff;letter-spacing:-.5px;}
+  .f-leg{font-size:9.5px;color:#7C8CA8;margin-top:2px;}
+  .f-corpo{padding:14px;}
+  .f-mic{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2563EB,#1D4ED8);margin:4px auto 8px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(37,99,235,.45);}
+  .f-dica{text-align:center;font-size:9.5px;color:#7C8CA8;margin-bottom:14px;}
+  .f-item{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.04);border-radius:12px;padding:9px 11px;margin-bottom:8px;}
+  .f-ic{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+  .f-item b{font-size:11px;color:#E6EDF7;font-weight:600;display:block;}
+  .f-item small{font-size:9px;color:#7C8CA8;}
+  .f-val{margin-left:auto;font-size:11.5px;font-weight:700;white-space:nowrap;}
+  .neg{color:var(--vermelho);} .pos{color:var(--verde);}
+
+  section{padding:38px 0;}
+  .sec-titulo{text-align:center;max-width:580px;margin:0 auto 42px;}
+  .sec-titulo h2{font-size:clamp(25px,3.2vw,33px);font-weight:800;letter-spacing:-.6px;}
+  .sec-titulo p{margin-top:10px;color:var(--muted);font-size:15.5px;}
+
+  .grade{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .cartao{background:var(--card);border:1px solid var(--borda);border-radius:20px;padding:24px 22px;transition:.25s;}
+  .cartao:hover{border-color:var(--borda-forte);transform:translateY(-3px);background:rgba(255,255,255,.05);}
+  .cartao .emoji{width:44px;height:44px;border-radius:14px;background:rgba(37,99,235,.14);border:1px solid rgba(96,165,250,.2);display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:15px;}
+  .cartao b{font-size:15.5px;font-weight:700;display:block;margin-bottom:6px;}
+  .cartao p{font-size:14px;color:var(--muted);}
+
+  /* passo a passo de instalação */
+  .abas{display:flex;gap:8px;justify-content:center;margin-bottom:26px;flex-wrap:wrap;}
+  .aba{background:var(--card);border:1px solid var(--borda);color:var(--muted);font-size:14px;font-weight:600;padding:11px 22px;border-radius:99px;cursor:pointer;transition:.2s;font-family:inherit;}
+  .aba:hover{border-color:var(--borda-forte);color:var(--texto);}
+  .aba.ativa{background:rgba(37,99,235,.18);border-color:rgba(96,165,250,.4);color:#fff;}
+  .painel{display:none;max-width:640px;margin:0 auto;}
+  .painel.ativo{display:block;}
+  .passo{display:flex;gap:16px;align-items:flex-start;background:var(--card);border:1px solid var(--borda);border-radius:16px;padding:18px 20px;margin-bottom:11px;}
+  .passo-num{width:30px;height:30px;flex-shrink:0;border-radius:50%;background:rgba(37,99,235,.2);border:1px solid rgba(96,165,250,.35);color:#A9C8F5;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;}
+  .passo-txt{font-size:15px;color:#D2DEEF;}
+  .passo-txt b{color:#fff;font-weight:700;}
+  .obs{background:rgba(52,211,153,.07);border:1px solid rgba(52,211,153,.28);border-radius:14px;padding:15px 18px;font-size:14px;color:#BFE9D8;margin-top:16px;}
+  .obs b{color:#fff;}
+
+  .lista-dados{max-width:660px;margin:0 auto;}
+  .lista-dados li{list-style:none;display:flex;gap:13px;align-items:flex-start;font-size:15px;color:#C7D5E9;padding:9px 0;}
+  .lista-dados .ck{color:var(--verde);font-weight:800;flex-shrink:0;}
+
+  footer{border-top:1px solid var(--borda);margin-top:56px;padding:32px 0 50px;text-align:center;color:var(--muted);font-size:13.5px;}
+  footer a{color:var(--azul-claro);text-decoration:none;}
+
+  @media (max-width:860px){
+    .hero{grid-template-columns:1fr;gap:36px;padding:26px 0 48px;}
+    .hero p{max-width:none;}
+    .fone-area{order:-1;}
+    .fone{width:250px;transform:none;}
+    .grade{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="glow glow-1"></div><div class="glow glow-2"></div>
+<main>
+
+<div class="wrap">
+  <div class="topo">
+    <a class="marca" href="#"><strong>FLUXO</strong><small>by Bruno Kaminski</small></a>
+    <a class="btn btn-ghost" href="index.html" style="padding:9px 18px;font-size:13.5px;">Abrir o app</a>
+  </div>
+
+  <!-- HERÓI -->
+  <div class="hero">
+    <div>
+      <div class="selo"><span class="ponto"></span> Grátis · sem anúncio · sem pegadinha</div>
+      <h1>Falei.<br><em>Anotou.</em></h1>
+      <p>Você fala <b>"gastei 35 reais no mercado"</b> e o gasto entra sozinho, já na categoria certa. Sem planilha, sem digitar, sem complicação.</p>
+      <div class="hero-botoes">
+        <a class="btn btn-azul" href="index.html">Começar a usar</a>
+        <a class="btn btn-ghost" href="#instalar">Como instalar no celular</a>
+      </div>
+      <div class="hero-nota">Funciona no iPhone, no Android e no computador.</div>
+    </div>
+
+    <div class="fone-area">
+      <div class="fone"><div class="fone-tela">
+        <div class="f-head">
+          <div class="f-logo">FLUXO</div>
+          <div class="f-saldo">R$ 2.847,30</div>
+          <div class="f-leg">saldo do mês atual</div>
+        </div>
+        <div class="f-corpo">
+          <div class="f-mic">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+              <rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </div>
+          <div class="f-dica">toque e fale o seu gasto</div>
+          <div class="f-item"><div class="f-ic" style="background:#0EA5E9;">🛒</div><div><b>Mercado</b><small>hoje</small></div><div class="f-val neg">− R$ 35,00</div></div>
+          <div class="f-item"><div class="f-ic" style="background:#22C55E;">💼</div><div><b>Salário</b><small>ontem</small></div><div class="f-val pos">+ R$ 3.200,00</div></div>
+          <div class="f-item"><div class="f-ic" style="background:#F97316;">🍔</div><div><b>Lanche</b><small>ontem</small></div><div class="f-val neg">− R$ 28,50</div></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- O QUE FAZ -->
+  <section>
+    <div class="sec-titulo">
+      <h2>O que dá pra fazer</h2>
+      <p>O suficiente pra saber pra onde vai seu dinheiro — e nada além disso.</p>
+    </div>
+    <div class="grade">
+      <div class="cartao"><div class="emoji">🎤</div><b>Lançar falando</b><p>Fale o gasto do jeito que você pensa. Ele entende o valor, a categoria e até "ontem" e "anteontem".</p></div>
+      <div class="cartao"><div class="emoji">📊</div><b>Ver pra onde foi</b><p>Resumo do mês, comparação entre os meses e a lista do que mais pesou no bolso.</p></div>
+      <div class="cartao"><div class="emoji">🐷</div><b>Cofre e metas</b><p>O que você guarda não conta como gasto. Defina uma meta de economia e acompanhe.</p></div>
+      <div class="cartao"><div class="emoji">🔁</div><b>Contas todo mês</b><p>Aluguel, internet, academia. Cadastre uma vez e ele lança sozinho no dia certo.</p></div>
+      <div class="cartao"><div class="emoji">📋</div><b>Trazer sua planilha</b><p>Já controla no Excel? Ele lê a planilha e descobre sozinho quais são as colunas.</p></div>
+      <div class="cartao"><div class="emoji">🔒</div><b>Trancado e salvo</b><p>Bloqueio por PIN, cópia de segurança automática todo dia e seus dados na nuvem.</p></div>
+    </div>
+  </section>
+
+  <!-- INSTALAR -->
+  <section id="instalar">
+    <div class="sec-titulo">
+      <h2>Como instalar</h2>
+      <p>Não está em loja de aplicativo. Você instala direto pelo navegador, em 4 toques — e ele fica com ícone próprio, igual a qualquer outro app.</p>
+    </div>
+
+    <div class="abas">
+      <button class="aba ativa" data-alvo="iphone">🍎 iPhone</button>
+      <button class="aba" data-alvo="android">🤖 Android</button>
+      <button class="aba" data-alvo="pc">💻 Computador</button>
+    </div>
+
+    <div class="painel ativo" id="iphone">
+      <div class="passo"><div class="passo-num">1</div><div class="passo-txt">Abra esta página no <b>Safari</b>. Precisa ser o Safari — no iPhone só ele instala na tela de início.</div></div>
+      <div class="passo"><div class="passo-num">2</div><div class="passo-txt">Toque no botão de <b>compartilhar</b> — o quadradinho com a seta pra cima, na barra de baixo.</div></div>
+      <div class="passo"><div class="passo-num">3</div><div class="passo-txt">Role a lista e toque em <b>"Adicionar à Tela de Início"</b>.</div></div>
+      <div class="passo"><div class="passo-num">4</div><div class="passo-txt">Toque em <b>"Adicionar"</b>. Pronto — o ícone do Fluxo aparece junto dos seus apps.</div></div>
+      <div class="obs"><b>Sobre o microfone no iPhone:</b> a Apple pede permissão toda vez que o app abre, e às vezes o reconhecimento falha. Não tem conserto do nosso lado. Se incomodar, é só digitar no formulário — funciona igual.</div>
+    </div>
+
+    <div class="painel" id="android">
+      <div class="passo"><div class="passo-num">1</div><div class="passo-txt">Abra esta página no <b>Chrome</b>.</div></div>
+      <div class="passo"><div class="passo-num">2</div><div class="passo-txt">Toque nos <b>três pontinhos</b> no canto superior direito.</div></div>
+      <div class="passo"><div class="passo-num">3</div><div class="passo-txt">Toque em <b>"Instalar aplicativo"</b> ou <b>"Adicionar à tela inicial"</b>.</div></div>
+      <div class="passo"><div class="passo-num">4</div><div class="passo-txt">Confirme. O ícone aparece junto dos seus apps.</div></div>
+      <div class="obs">No Android o microfone funciona redondo: dá a permissão uma vez e nunca mais.</div>
+    </div>
+
+    <div class="painel" id="pc">
+      <div class="passo"><div class="passo-num">1</div><div class="passo-txt">Abra esta página no <b>Chrome</b> ou no <b>Edge</b>.</div></div>
+      <div class="passo"><div class="passo-num">2</div><div class="passo-txt">Na barra de endereço, à direita, clique no <b>ícone de instalar</b> (um monitor com uma seta).</div></div>
+      <div class="passo"><div class="passo-num">3</div><div class="passo-txt">Clique em <b>"Instalar"</b>. Ele vira um programa, com janela própria.</div></div>
+      <div class="obs">Só no computador o Fluxo consegue também <b>gravar uma cópia de segurança num arquivo seu</b>, na pasta que você escolher. Fica em Ajustes.</div>
+    </div>
+  </section>
+
+  <!-- COMO USAR -->
+  <section>
+    <div class="sec-titulo">
+      <h2>Como usar, em um minuto</h2>
+    </div>
+    <div class="painel ativo" style="max-width:640px;">
+      <div class="passo"><div class="passo-num">1</div><div class="passo-txt">Crie sua conta com <b>e-mail e senha</b>. Seus dados ficam na nuvem, então você abre no celular e no computador e vê a mesma coisa.</div></div>
+      <div class="passo"><div class="passo-num">2</div><div class="passo-txt">Toque no <b>microfone</b> e fale: <i>"gastei 35 reais no mercado"</i>. Ou preencha o formulário, se preferir.</div></div>
+      <div class="passo"><div class="passo-num">3</div><div class="passo-txt"><b>Confira</b> o que ele entendeu — valor, data, categoria — e toque em Salvar.</div></div>
+      <div class="passo"><div class="passo-num">4</div><div class="passo-txt">Pronto. Vá no <b>Resumo</b> no fim do mês pra ver pra onde o dinheiro foi.</div></div>
+    </div>
+  </section>
+
+  <!-- DADOS -->
+  <section id="dados">
+    <div class="sec-titulo">
+      <h2>Sobre os seus dados</h2>
+      <p>Em português claro, porque é o seu dinheiro que está ali.</p>
+    </div>
+    <ul class="lista-dados">
+      <li><span class="ck">✓</span><span><b>Só você vê os seus lançamentos.</b> Cada conta só enxerga a própria — nem eu consigo abrir os seus. A separação é feita no servidor, não no seu celular.</span></li>
+      <li><span class="ck">✓</span><span><b>Ficam guardados na nuvem</b> (num serviço chamado Supabase), pra você não perder nada se trocar de aparelho.</span></li>
+      <li><span class="ck">✓</span><span><b>Nada de banco.</b> O app não se conecta à sua conta bancária, não vê extrato e não mexe em dinheiro. Só existe ali o que você digitou ou falou.</span></li>
+      <li><span class="ck">✓</span><span><b>Sobre a voz:</b> quem transforma sua fala em texto é o próprio celular, usando o serviço do fabricante (Google no Android, Apple no iPhone). O app não grava e não guarda áudio — recebe só o texto.</span></li>
+      <li><span class="ck">✓</span><span><b>Sem anúncio e sem venda de dados.</b> Nada é usado pra propaganda, nada é repassado pra ninguém.</span></li>
+      <li><span class="ck">✓</span><span><b>Você leva embora ou apaga quando quiser.</b> Em <i>Ajustes</i> tem "Baixar backup", que gera um arquivo com tudo, e "Apagar minha conta", que elimina tudo na hora, sem volta.</span></li>
+    </ul>
+    <div class="obs" style="max-width:660px;margin:26px auto 0;">
+      <b>Este é um app feito em casa, oferecido de graça a amigos e familiares.</b>
+      Não é um produto de empresa, não tem suporte formal nem garantia de funcionamento.
+      Faço o meu melhor pra ele ser confiável — e ele guarda cópias de segurança sozinho —
+      mas, se seus registros forem importantes, baixe um backup de vez em quando.
+      Qualquer dúvida ou problema, é só me chamar.
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div style="font-weight:700;letter-spacing:2px;color:var(--texto);margin-bottom:6px;">FLUXO</div>
+    feito por Bruno Kaminski · <a href="mailto:brunopkaminski@gmail.com">brunopkaminski@gmail.com</a>
+  </div>
+</footer>
+</main>
+
+<script>
+  // Abas do passo a passo de instalação
+  document.querySelectorAll('.aba').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.aba').forEach(function(x){ x.classList.remove('ativa'); });
+      document.querySelectorAll('#instalar .painel').forEach(function(p){ p.classList.remove('ativo'); });
+      b.classList.add('ativa');
+      document.getElementById(b.dataset.alvo).classList.add('ativo');
+    });
+  });
+  // Já abre na aba do aparelho que a pessoa está usando
+  (function(){
+    var ua = navigator.userAgent;
+    var alvo = /iPhone|iPad|iPod/i.test(ua) ? 'iphone' : (/Android/i.test(ua) ? 'android' : 'pc');
+    var botao = document.querySelector('.aba[data-alvo="' + alvo + '"]');
+    if(botao) botao.click();
+  })();
+</script>
+</body>
+</html>

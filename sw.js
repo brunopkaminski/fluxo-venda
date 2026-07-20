@@ -1,4 +1,4 @@
-const CACHE_NAME = 'controlei-v3';
+const CACHE_NAME = 'fluxo-v6';
 const APP_SHELL = ['./index.html', './manifest.json', './icon-192.png?v=5', './icon-512.png?v=5', './icon-maskable-192.png?v=5', './icon-maskable-512.png?v=5'];
 
 self.addEventListener('install', (event) => {

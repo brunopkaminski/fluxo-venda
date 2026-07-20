@@ -1,7 +1,7 @@
 {
-  "name": "Controlei",
-  "short_name": "Controlei",
-  "description": "Falei. Controlei. Finanças por voz: fale o gasto e pronto.",
+  "name": "Fluxo",
+  "short_name": "Fluxo",
+  "description": "Falei. Anotou. Finanças por voz: fale o gasto e pronto.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
