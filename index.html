@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Controlei</title>
 <meta name="theme-color" content="#0F172A">
 <link rel="manifest" href="manifest.json">
@@ -26,8 +26,16 @@
     --card:#111827; --fundo:#0B1220; --texto:#F1F5F9; --muted:#94A3B8; --border-cor:#1F2937;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--texto);padding-bottom:calc(62px + env(safe-area-inset-bottom));transition:background .2s,color .2s;-webkit-font-smoothing:antialiased;}
-  header{background:var(--bg);color:white;padding:12px 18px calc(10px + env(safe-area-inset-top)) 18px;position:sticky;top:0;z-index:5;}
+  /* App de tela fixa, não página de site: no iPhone é preciso desligar na mão o
+     efeito elástico da rolagem e o zoom de dois toques. O Android já se comportava
+     assim sozinho; sem isto, no iPhone a tela "escorrega" e volta. */
+  html{overscroll-behavior-y:none;}
+  body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--texto);padding-bottom:calc(62px + env(safe-area-inset-bottom));transition:background .2s,color .2s;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;touch-action:manipulation;-webkit-text-size-adjust:100%;}
+  /* ATENÇÃO à ordem do padding: topo direita BAIXO esquerda. O espaço da franja
+     (safe-area-inset-top) tem que entrar no TOPO — estava no de baixo, e por isso
+     o título "CONTROLEI" ficava escondido embaixo da barra de status no iPhone.
+     No Android o valor é 0, então lá nunca deu pra perceber. */
+  header{background:var(--bg);color:white;padding:calc(12px + env(safe-area-inset-top)) 18px 10px 18px;position:sticky;top:0;z-index:5;}
   header h1{margin:0;font-size:19px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:7px;letter-spacing:2px;text-transform:uppercase;color:#fff;text-align:center;}
   .header-flourish{display:block;margin:2px auto 0;}
   .saldo-row{display:flex;align-items:center;gap:8px;margin-top:6px;}
@@ -44,7 +52,9 @@
   .header-gear{position:absolute;top:calc(8px + env(safe-area-inset-top));right:10px;background:transparent;padding:7px;border-radius:50%;color:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;}
   .header-gear.active{color:#60A5FA;}
   @media (min-width:700px){
-    header{padding:14px 18px 12px 18px;}
+    /* iPhone deitado passa de 700px de largura, então esta regra também vale pra
+       ele — por isso o espaço da franja precisa continuar aqui. No PC dá 0. */
+    header{padding:calc(14px + env(safe-area-inset-top)) 18px 12px 18px;}
     header h1{font-size:26px;}
     .header-flourish{margin-top:4px;}
   }
@@ -96,6 +106,13 @@
   .val.saida{color:var(--vermelho);}
   .cat-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;}
   .grupo-data{font-size:11.5px;color:var(--muted);font-weight:700;margin:16px 0 6px 0;text-transform:uppercase;letter-spacing:.4px;}
+  /* Puxar para atualizar. O app instalado no iPhone NÃO tem isso de fábrica (no
+     Android o próprio navegador dava). Então é feito na mão aqui, e assim os dois
+     ficam iguais: puxou lá em cima, recarrega e zera o formulário. */
+  #ptr{position:fixed;top:calc(6px + env(safe-area-inset-top));left:50%;z-index:60;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:var(--card);box-shadow:0 3px 10px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:0;pointer-events:none;transform:translateY(-46px);}
+  #ptr.soltou{transition:transform .25s ease,opacity .25s ease;}
+  #ptr.girando svg{animation:ptr-gira .7s linear infinite;}
+  @keyframes ptr-gira{to{transform:rotate(360deg);}}
   .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:#0F172A;color:#fff;padding:11px 20px;border-radius:30px;font-size:14px;z-index:50;opacity:0;transition:opacity .25s;pointer-events:none;}
   .toast.show{opacity:1;}
   .banner{background:#FEF3C7;color:#92400E;padding:13px;border-radius:11px;margin-bottom:16px;font-size:13px;}
@@ -480,12 +497,25 @@
 <div id="modalRoot"></div>
 
 <script>
+/* =================== TELA FIXA NO IPHONE ===================
+   O iPhone ignora o "user-scalable=no" do cabeçalho da página em boa parte das
+   versões — é decisão de acessibilidade da Apple. Então o beliscão de dois dedos
+   (pinça) e o zoom de dois toques precisam ser barrados aqui, no braço. Sem isto
+   o app dá zoom sozinho ao tocar um campo e sai do enquadramento, coisa que no
+   Android nunca acontecia. Nada disso tem efeito fora do iPhone.
+   O zoom de dois toques quem barra é o "touch-action:manipulation" no CSS do body
+   — de propósito, e não por JavaScript: bloquear toque no braço acabava engolindo
+   toques legítimos rápidos em botões diferentes. */
+['gesturestart','gesturechange','gestureend'].forEach(function(evento){
+  document.addEventListener(evento, function(e){ e.preventDefault(); }, {passive:false});
+});
+
 /* =================== AUTO-ATUALIZAÇÃO =================== */
 // No Android, o PWA instalado muitas vezes volta do segundo plano SEM recarregar a
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'venda-2026-07-20.1'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'venda-2026-07-20.3'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -1195,13 +1225,31 @@ if(!SpeechRec){
   rec.continuous = false;
   rec.interimResults = false;
 
+  const TEXTO_PARADO = 'Toque para falar — ex: "gastei 35 reais no mercado"';
+
+  // O mesmo botão liga e desliga. Antes, tocar de novo enquanto ele ouvia não
+  // fazia nada — quem abria o microfone sem querer ficava preso esperando o
+  // tempo acabar, sem nenhum lugar pra cancelar.
   btnMic.addEventListener('click', ()=>{
-    if(reconhecendo) return;
+    if(reconhecendo){
+      try{ rec.stop(); }catch(e){}   // stop (e não abort): se ele chegou a falar, aproveita
+      return;
+    }
     try{ rec.start(); }catch(e){}
   });
-  rec.onstart = ()=>{ reconhecendo = true; btnMic.classList.add('listening'); micLabel.textContent = 'Ouvindo...'; };
-  rec.onend = ()=>{ reconhecendo = false; btnMic.classList.remove('listening'); micLabel.textContent = 'Toque para falar — ex: "gastei 35 reais no mercado"'; };
-  rec.onerror = ()=>{ reconhecendo = false; btnMic.classList.remove('listening'); micLabel.textContent = 'Não entendi, tente de novo.'; };
+  rec.onstart = ()=>{ reconhecendo = true; btnMic.classList.add('listening'); micLabel.textContent = 'Ouvindo… toque de novo para parar'; };
+  rec.onend = ()=>{ reconhecendo = false; btnMic.classList.remove('listening'); micLabel.textContent = TEXTO_PARADO; };
+  rec.onerror = (ev)=>{
+    reconhecendo = false; btnMic.classList.remove('listening');
+    // "aborted" e "no-speech" são cancelamento normal, não erro: não faz sentido
+    // acusar "não entendi" quando foi o próprio usuário que desistiu.
+    const motivo = ev && ev.error;
+    micLabel.textContent = (motivo === 'aborted' || motivo === 'no-speech')
+      ? TEXTO_PARADO
+      : (motivo === 'not-allowed' || motivo === 'service-not-allowed')
+        ? 'Sem permissão para o microfone. Libere nos Ajustes do aparelho ou digite abaixo.'
+        : 'Não entendi, tente de novo.';
+  };
   rec.onresult = (ev)=>{
     const texto = ev.results[0][0].transcript;
     aplicarInterpretacao(texto);
@@ -2476,6 +2524,110 @@ document.getElementById('inputPlanilha').addEventListener('change', async (ev)=>
     alert(e && e.message ? e.message : 'Não consegui ler este arquivo.');
   }
 });
+
+/* =================== PUXAR PARA ATUALIZAR ===================
+   No Android o navegador fazia isso sozinho; no iPhone o app instalado não tem.
+   Aqui é feito na mão, para os dois ficarem iguais: puxou a tela para baixo lá
+   no topo, tudo zera — que é o jeito rápido de recomeçar quando a fala saiu errada.
+
+   POR QUE NÃO RECARREGA A PÁGINA: o resultado na tela é o mesmo, mas recarregar
+   no iPhone faz o aparelho pedir a permissão do microfone OUTRA VEZ (o iPhone não
+   guarda essa permissão entre carregamentos, diferente do Android). Então aqui a
+   tela é limpa e os dados são rebuscados da nuvem sem sair da página — instantâneo
+   e sem novo pedido de microfone. Recarga de verdade só quando existe versão nova
+   publicada, e disso quem cuida é a verificarVersaoNova(). */
+function zerarTelaAdicionar(){
+  document.getElementById('inValor').value = '';
+  document.getElementById('inDescricao').value = '';
+  document.getElementById('inData').value = hojeISO();
+  setTipo('saida');
+  const cat = document.getElementById('inCategoria');
+  if(cat.options.length) cat.selectedIndex = 0;
+  document.getElementById('recentesLista').innerHTML = '';
+  document.getElementById('cardRecentes').style.display = 'none';
+  const rot = document.getElementById('micLabel');
+  if(rot) rot.textContent = 'Toque para falar — ex: "gastei 35 reais no mercado"';
+}
+async function atualizarPuxando(){
+  zerarTelaAdicionar();
+  try{ await sincronizar(); }catch(e){}   // rebusca os lançamentos da nuvem
+  render();
+  verificarVersaoNova();                  // se houver versão nova publicada, ela recarrega
+  window.scrollTo(0, 0);
+}
+(function puxarParaAtualizar(){
+  const LIMITE = 72;          // o quanto precisa puxar para valer
+  const MAXIMO = 110;         // até onde a bolinha desce
+  const bolinha = document.createElement('div');
+  bolinha.id = 'ptr';
+  bolinha.innerHTML = icon('refresh', 18, 'currentColor');
+  document.body.appendChild(bolinha);
+
+  let inicioY = null, distancia = 0, ativo = false;
+
+  function podePuxar(){
+    if(window.scrollY > 0) return false;
+    if(document.getElementById('modalRoot').innerHTML.trim() !== '') return false;  // modal aberto
+    const lock = document.getElementById('lockScreen');
+    if(lock && lock.style.display === 'flex') return false;          // tela de PIN
+    const login = document.getElementById('telaLogin');
+    if(login && login.style.display !== 'none') return false;        // tela de entrar
+    return true;
+  }
+  function mostrar(d){
+    const p = Math.min(d / LIMITE, 1);
+    bolinha.style.transform = 'translateY(' + (Math.min(d, MAXIMO) - 46) + 'px) rotate(' + (d * 2.4) + 'deg)';
+    bolinha.style.opacity = p;
+  }
+  function esconder(){
+    bolinha.classList.add('soltou');
+    bolinha.style.transform = 'translateY(-46px)';
+    bolinha.style.opacity = 0;
+    setTimeout(()=>bolinha.classList.remove('soltou'), 280);
+  }
+
+  document.addEventListener('touchstart', e=>{
+    if(e.touches.length !== 1 || !podePuxar()){ inicioY = null; return; }
+    inicioY = e.touches[0].clientY;
+    distancia = 0; ativo = false;
+    bolinha.classList.remove('soltou');
+  }, {passive:true});
+
+  document.addEventListener('touchmove', e=>{
+    if(inicioY === null) return;
+    const dy = e.touches[0].clientY - inicioY;
+    // Subiu o dedo (rolagem normal) ou saiu do topo: cancela e sai da frente.
+    if(dy <= 0 || window.scrollY > 0){
+      if(ativo){ esconder(); ativo = false; }
+      inicioY = null; return;
+    }
+    ativo = true;
+    distancia = dy;
+    mostrar(dy);
+    e.preventDefault();   // segura a página parada enquanto ele puxa
+  }, {passive:false});
+
+  document.addEventListener('touchend', ()=>{
+    if(inicioY === null || !ativo){ inicioY = null; return; }
+    inicioY = null; ativo = false;
+    if(distancia >= LIMITE){
+      bolinha.classList.add('girando');
+      bolinha.style.transform = 'translateY(16px)';
+      bolinha.style.opacity = 1;
+      Promise.resolve(atualizarPuxando()).then(()=>{
+        // um respiro mínimo pra bolinha girar e ele perceber que atualizou
+        setTimeout(()=>{ bolinha.classList.remove('girando'); esconder(); toast('Atualizado'); }, 420);
+      });
+    } else {
+      esconder();
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchcancel', ()=>{
+    if(ativo) esconder();
+    inicioY = null; ativo = false;
+  }, {passive:true});
+})();
 
 /* =================== INICIALIZAÇÃO =================== */
 function render(){
