@@ -1,7 +1,7 @@
 {
   "name": "Fluxo",
   "short_name": "Fluxo",
-  "description": "Falei. Anotou. Finanças por voz: fale o gasto e pronto.",
+  "description": "É o Fluxo, vem! Controle seus gastos falando.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

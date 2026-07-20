@@ -534,7 +534,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'fluxo-2026-07-20.8'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'fluxo-2026-07-20.9'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
