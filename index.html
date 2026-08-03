@@ -534,7 +534,7 @@
 // página — então nunca busca a versão nova do site, mesmo com o service worker
 // rede-primeiro. Este bloco resolve de vez: ao voltar pro primeiro plano, o app
 // baixa o index.html publicado, compara a versão e recarrega sozinho se mudou.
-const APP_VERSAO = 'fluxo-2026-07-20.9'; // IMPORTANTE: subir este número a cada publicação
+const APP_VERSAO = 'fluxo-2026-08-03.1'; // IMPORTANTE: subir este número a cada publicação
 async function verificarVersaoNova(){
   try{
     const res = await fetch('index.html', {cache:'no-store'});
@@ -734,6 +734,44 @@ function categoriaInfo(nome){
   return getCategorias().find(c=>c.nome===nome) || {nome, icone:'tag', cor:'#94A3B8'};
 }
 
+// Apaga a "lápide" de uma categoria (o registro de que ela foi removida um dia).
+// Sem isto, recriar uma categoria com um nome que já foi apagado não adiantava:
+// na próxima sincronização a lápide antiga a removia de novo, silenciosamente.
+// Era ESTA a causa das categorias sumirem sozinhas.
+function limparLapideCategoria(nome){
+  try{
+    const a = getApagados();
+    if(a.cat && Object.prototype.hasOwnProperty.call(a.cat, String(nome))){
+      delete a.cat[String(nome)];
+      setApagados(a);
+    }
+  }catch(e){}
+}
+
+// REDE DE SEGURANÇA das categorias. Todo lançamento guarda o NOME da sua
+// categoria dentro dele. Então, mesmo que a lista de categorias seja zerada por
+// qualquer motivo (sincronização, lápide antiga, troca de endereço do site),
+// dá para reconstruí-la a partir dos próprios lançamentos: qualquer categoria
+// que apareça em algum lançamento passa a existir na lista de novo.
+// Como a cor e o ícone são SEMPRE automáticos (a tela só pede o nome da
+// categoria), a categoria volta idêntica ao que era. Uma categoria que tem
+// lançamento nunca mais some. Devolve true se reconstruiu alguma coisa.
+function garantirCategoriasDosLancamentos(){
+  const cats = getCategorias();
+  const existentes = new Set(cats.map(c=>c.nome));
+  let mudou = false;
+  getCache().forEach(t=>{
+    const nome = t && t.categoria;
+    if(!nome || existentes.has(nome)) return;
+    existentes.add(nome);
+    cats.push(Object.assign({nome}, sugerirIconeCor(nome, cats.length)));
+    limparLapideCategoria(nome);   // se ela tinha lápide, a lápide vai embora
+    mudou = true;
+  });
+  if(mudou) setCategorias(cats);
+  return mudou;
+}
+
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -928,10 +966,19 @@ function juntarDados(remoto, local){
     const qa = Date.parse((a||{})[campoData] || 0), qb = Date.parse((b||{})[campoData] || 0);
     return (isFinite(qb) ? qb : 0) >= (isFinite(qa) ? qa : 0) ? b : a;
   };
+  const transacoes = juntarListas(remoto.transacoes, local.transacoes, 'id', lap.tx);
+  // AQUI ESTAVA A CAUSA DAS CATEGORIAS SUMIREM: uma categoria apagada um dia
+  // deixava uma "lápide" que a filtrava para sempre — inclusive quando ela tinha
+  // lançamentos e o usuário a queria de volta. Agora a regra é clara: se existe
+  // pelo menos um lançamento naquela categoria, a lápide NÃO vale. Categoria em
+  // uso jamais é apagada por engano.
+  const catEmUso = new Set(transacoes.map(t=>t && t.categoria).filter(Boolean));
+  const lapCat = {};
+  Object.keys(lap.cat).forEach(nome=>{ if(!catEmUso.has(nome)) lapCat[nome] = lap.cat[nome]; });
   return {
-    transacoes:  juntarListas(remoto.transacoes,  local.transacoes,  'id',   lap.tx),
+    transacoes:  transacoes,
     recorrentes: juntarListas(remoto.recorrentes, local.recorrentes, 'id',   lap.rec),
-    categorias:  juntarListas(remoto.categorias,  local.categorias,  'nome', lap.cat),
+    categorias:  juntarListas(remoto.categorias,  local.categorias,  'nome', lapCat),
     // Orçamento e meta são pequenos e raramente mexidos nos dois ao mesmo tempo:
     // vale o pacote salvo mais recentemente.
     orcamentos: (maisNovo(remoto, local, 'salvoEm') === local ? local.orcamentos : remoto.orcamentos) || {},
@@ -1241,6 +1288,7 @@ async function depoisDoLogin(){
   document.getElementById('telaLogin').style.display = 'none';
   try{ await baixaNuvem(); }catch(e){}
   try{ await carregaAssinatura(); }catch(e){}
+  garantirCategoriasDosLancamentos();   // reconstrói categorias sumidas a partir dos lançamentos
   popularFiltrosData();
   popularCategorias(document.getElementById('inCategoria'), false);
   render();
@@ -1286,6 +1334,7 @@ async function sincronizar(){
     ultimaSincronizacao = Date.now();
     await baixaNuvem();
     await carregaAssinatura();
+    garantirCategoriasDosLancamentos();   // categoria com lançamento nunca some
     render();
     verificarRecorrentes();
     checarAssinatura();
@@ -2329,6 +2378,7 @@ document.getElementById('btnAddCategoria').addEventListener('click', ()=>{
   if(!cats.some(c=>c.nome===v)){
     const sugestao = sugerirIconeCor(v, cats.length);
     cats.push(Object.assign({nome:v}, sugestao));
+    limparLapideCategoria(v);   // se esse nome já foi apagado um dia, some a lápide
     setCategorias(cats);
   }
   document.getElementById('novaCategoria').value='';
@@ -2705,6 +2755,7 @@ function plGravar(lancamentos){
     if(!nomes.has(t.categoria)){
       nomes.add(t.categoria);
       cats.push(Object.assign({nome:t.categoria}, sugerirIconeCor(t.categoria, cats.length)));
+      limparLapideCategoria(t.categoria);
       novas.push(t.categoria);
     }
     cache.push({
